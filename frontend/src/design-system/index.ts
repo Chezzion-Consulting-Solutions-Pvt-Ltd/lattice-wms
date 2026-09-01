@@ -1,4 +1,5 @@
 export * from './components/Badge';
+export * from './components/BrandLogo';
 export * from './components/Button';
 export * from './components/Card';
 export * from './components/Choices';

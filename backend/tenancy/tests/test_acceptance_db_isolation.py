@@ -34,7 +34,7 @@ def registered_alpha_beta(db):
         database = TenantDatabase.objects.create(
             tenant=tenant,
             database_alias=f"tenant_{code}",
-            database_host_reference="local-postgres",
+            database_host_reference=os.environ.get("POSTGRES_HOST", "localhost"),
             database_name=f"lattice_{code}",
             runtime_role_name=f"lattice_{code}_app",
             secret_reference=f"env:TENANT_{code.upper()}_DB_PASSWORD",
@@ -92,7 +92,14 @@ def test_alpha_user_routes_to_alpha_database_and_cannot_read_beta_context_object
     with psycopg.connect(_dsn("lattice_alpha_app", alpha_password, "lattice_alpha"), connect_timeout=2) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                "insert into warehouse_warehouse (id, code, name, is_active) values (%s, %s, %s, %s)",
+                """
+                insert into warehouse_warehouse (
+                    id, code, name, is_active, address_line_1, address_line_2,
+                    capacity_metadata, city, country, created_at, description,
+                    postal_code, state, status, timezone, updated_at, warehouse_type
+                )
+                values (%s, %s, %s, %s, '', '', '{}', '', '', now(), '', '', '', 'ACTIVE', 'UTC', now(), '')
+                """,
                 (warehouse_id, f"A-{uuid4().hex[:12]}", "Alpha Warehouse", True),
             )
             cursor.execute(

@@ -21,7 +21,7 @@ def register_tenant_database(database: TenantDatabase) -> str:
             "NAME": database.database_name,
             "USER": database.runtime_role_name,
             "PASSWORD": password,
-            "HOST": settings.POSTGRES_HOST if hasattr(settings, "POSTGRES_HOST") else "localhost",
+            "HOST": database.database_host_reference or (settings.POSTGRES_HOST if hasattr(settings, "POSTGRES_HOST") else "localhost"),
             "PORT": str(database.port),
             "CONN_MAX_AGE": 60,
             "OPTIONS": {

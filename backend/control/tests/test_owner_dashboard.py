@@ -163,6 +163,63 @@ def test_owner_tenant_crud_lifecycle_and_audit(db):
     assert "TENANT_SUSPEND" in actions
 
 
+def test_owner_can_register_tenant_database_without_exposing_secret_reference(db):
+    client, owner = owner_client()
+    tenant = Tenant.objects.create(tenant_code="delta", display_name="Tenant Delta")
+
+    response = client.put(
+        f"/api/v1/control/owner/tenants/{tenant.id}/database/",
+        {
+            "database_alias": "tenant_delta",
+            "database_host_reference": "postgres",
+            "port": 5432,
+            "database_name": "lattice_delta",
+            "runtime_role_name": "lattice_delta_app",
+            "secret_reference": "env:TENANT_DELTA_DB_PASSWORD",
+            "sslmode": "prefer",
+            "migration_version": "0002",
+            "provisioning_status": TenantDatabase.ProvisioningStatus.READY,
+            "health_status": TenantDatabase.HealthStatus.HEALTHY,
+        },
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["tenant"]
+    assert payload["database"]["alias"] == "tenant_delta"
+    assert payload["database"]["host_reference"] == "postgres"
+    assert payload["database"]["name"] == "lattice_delta"
+    assert payload["database"]["runtime_role"] == "lattice_delta_app"
+    assert payload["database"]["provisioning_status"] == TenantDatabase.ProvisioningStatus.READY
+    body = response.content.decode()
+    assert "secret_reference" not in body
+    assert "TENANT_DELTA_DB_PASSWORD" not in body
+    audit = AuditEvent.objects.get(global_user_id=owner.id, action="TENANT_DATABASE_CREATE")
+    assert audit.after_summary["secret_reference_configured"] is True
+    assert "TENANT_DELTA_DB_PASSWORD" not in str(audit.after_summary)
+
+
+def test_owner_tenant_database_config_rejects_raw_credentials(db):
+    client, _owner = owner_client()
+    tenant = Tenant.objects.create(tenant_code="epsilon", display_name="Tenant Epsilon")
+
+    response = client.put(
+        f"/api/v1/control/owner/tenants/{tenant.id}/database/",
+        {
+            "database_alias": "tenant_epsilon",
+            "database_host_reference": "postgres",
+            "database_name": "lattice_epsilon",
+            "runtime_role_name": "lattice_epsilon_app",
+            "secret_reference": "env:TENANT_EPSILON_DB_PASSWORD",
+            "password": "plaintext-password",
+        },
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert not TenantDatabase.objects.filter(tenant=tenant).exists()
+
+
 def test_owner_tenant_crud_denies_non_owner(db):
     client = Client()
     user = get_user_model().objects.create_user(email="plain-user@example.test", password="StrongerPass123!")
@@ -171,6 +228,27 @@ def test_owner_tenant_crud_denies_non_owner(db):
     response = client.post(
         "/api/v1/control/owner/tenants/",
         {"tenant_code": "blocked", "display_name": "Blocked"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+
+
+def test_owner_tenant_database_config_denies_non_owner(db):
+    tenant = Tenant.objects.create(tenant_code="zeta", display_name="Tenant Zeta")
+    client = Client()
+    user = get_user_model().objects.create_user(email="plain-db-user@example.test", password="StrongerPass123!")
+    assert api_login(client, user.email, "StrongerPass123!").status_code == 200
+
+    response = client.put(
+        f"/api/v1/control/owner/tenants/{tenant.id}/database/",
+        {
+            "database_alias": "tenant_zeta",
+            "database_host_reference": "postgres",
+            "database_name": "lattice_zeta",
+            "runtime_role_name": "lattice_zeta_app",
+            "secret_reference": "env:TENANT_ZETA_DB_PASSWORD",
+        },
         content_type="application/json",
     )
 

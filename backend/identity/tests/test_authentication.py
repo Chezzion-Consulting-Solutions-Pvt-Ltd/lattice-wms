@@ -11,7 +11,8 @@ from django.test import override_settings
 from django.utils import timezone
 
 from audit.models import AuditEvent
-from identity.models import MfaDevice, PasswordResetToken, RecoveryCode, SecuritySession
+from control.models import Tenant, TenantDatabase, TenantDomain, TenantMembership, TenantModule
+from identity.models import MembershipRole, MfaDevice, PasswordResetToken, RecoveryCode, Role, SecuritySession, WarehouseAssignment
 from identity.views import _protect_secret, _unprotect_secret
 
 
@@ -30,6 +31,41 @@ def api_login(client: Client, email: str, password: str):
     )
 
 
+def tenant_login(client: Client, host: str, email: str, password: str, extra_payload: dict | None = None):
+    payload = {"email": email, "password": password}
+    if extra_payload:
+        payload.update(extra_payload)
+    return client.post(
+        "/api/v1/auth/login/",
+        payload,
+        content_type="application/json",
+        HTTP_HOST=host,
+    )
+
+
+def create_login_tenant(code: str, *, status=Tenant.Status.ACTIVE, verified=True, domain_active=True):
+    tenant = Tenant.objects.create(tenant_code=code, display_name=f"Tenant {code.title()}", status=status)
+    TenantDomain.objects.create(
+        tenant=tenant,
+        hostname=f"{code}.localhost",
+        verified=verified,
+        is_active=domain_active,
+        is_primary=True,
+        verification_method=TenantDomain.VerificationMethod.LOCAL_DEVELOPMENT,
+        verified_at=timezone.now() if verified else None,
+    )
+    TenantDatabase.objects.create(
+        tenant=tenant,
+        database_alias=f"tenant_{code}",
+        database_host_reference="postgres",
+        database_name=f"lattice_{code}",
+        runtime_role_name=f"lattice_{code}_app",
+        secret_reference=f"env:TENANT_{code.upper()}_DB_PASSWORD",
+        provisioning_status=TenantDatabase.ProvisioningStatus.READY,
+    )
+    return tenant
+
+
 def test_valid_login_creates_session_and_audit_event(db):
     user = get_user_model().objects.create_user(email="owner@example.test", password="StrongerPass123!")
 
@@ -39,6 +75,159 @@ def test_valid_login_creates_session_and_audit_event(db):
     assert response.json()["email"] == user.email
     assert SecuritySession.objects.filter(user=user, revoked_at__isnull=True).exists()
     assert AuditEvent.objects.filter(action="LOGIN_SUCCESS", global_user_id=user.id).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "gamma.localhost", "testserver"])
+def test_valid_alpha_user_login_on_alpha_domain_binds_tenant_session(db):
+    alpha = create_login_tenant("alpha")
+    user = get_user_model().objects.create_user(email="alpha.user@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=alpha, status=TenantMembership.Status.ACTIVE)
+    client = Client()
+
+    response = tenant_login(client, "alpha.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 200
+    session = SecuritySession.objects.get(user=user, revoked_at__isnull=True)
+    assert session.tenant == alpha
+    assert client.session["tenant_code"] == "alpha"
+    assert AuditEvent.objects.filter(action="TENANT_LOGIN_SUCCESS", global_user_id=user.id, tenant_id=alpha.id).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "testserver"])
+def test_login_context_returns_safe_tenant_display_without_database_details(db):
+    alpha = create_login_tenant("alpha")
+
+    response = Client().get("/api/v1/auth/login/context/", HTTP_HOST="alpha.localhost")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "tenant"
+    assert payload["tenant"]["display_name"] == alpha.display_name
+    body = response.content.decode()
+    assert "database" not in body
+    assert "runtime_role" not in body
+    assert "secret" not in body
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "gamma.localhost", "testserver"])
+def test_valid_beta_user_login_on_beta_domain_binds_tenant_session(db):
+    beta = create_login_tenant("beta")
+    user = get_user_model().objects.create_user(email="beta.user@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=beta, status=TenantMembership.Status.ACTIVE)
+
+    response = tenant_login(Client(), "beta.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 200
+    assert SecuritySession.objects.get(user=user, revoked_at__isnull=True).tenant == beta
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "gamma.localhost", "testserver"])
+def test_beta_user_on_alpha_domain_is_denied_without_fallback(db):
+    alpha = create_login_tenant("alpha")
+    beta = create_login_tenant("beta")
+    user = get_user_model().objects.create_user(email="beta.user@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=beta, status=TenantMembership.Status.ACTIVE)
+
+    response = tenant_login(Client(), "alpha.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TENANT_MEMBERSHIP_REQUIRED"
+    assert not SecuritySession.objects.filter(user=user).exists()
+    assert AuditEvent.objects.filter(action="TENANT_MEMBERSHIP_DENIED", global_user_id=user.id, tenant_id=alpha.id).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "gamma.localhost", "testserver"])
+def test_alpha_user_on_beta_domain_is_denied_without_fallback(db):
+    alpha = create_login_tenant("alpha")
+    beta = create_login_tenant("beta")
+    user = get_user_model().objects.create_user(email="alpha.user@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=alpha, status=TenantMembership.Status.ACTIVE)
+
+    response = tenant_login(Client(), "beta.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TENANT_MEMBERSHIP_REQUIRED"
+    assert not SecuritySession.objects.filter(user=user).exists()
+    assert AuditEvent.objects.filter(action="TENANT_MEMBERSHIP_DENIED", global_user_id=user.id, tenant_id=beta.id).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "gamma.localhost", "testserver"])
+def test_unknown_domain_is_denied_for_tenant_login(db):
+    user = get_user_model().objects.create_user(email="user@example.test", password="StrongerPass123!")
+
+    response = tenant_login(Client(), "gamma.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "UNKNOWN_TENANT_DOMAIN"
+    assert not SecuritySession.objects.filter(user=user).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "testserver"])
+def test_unverified_or_inactive_tenant_domain_is_denied(db):
+    create_login_tenant("alpha", verified=False)
+    user = get_user_model().objects.create_user(email="alpha.user@example.test", password="StrongerPass123!")
+
+    response = tenant_login(Client(), "alpha.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TENANT_DOMAIN_UNAVAILABLE"
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "testserver"])
+def test_suspended_tenant_domain_login_is_denied(db):
+    tenant = create_login_tenant("alpha", status=Tenant.Status.SUSPENDED)
+    user = get_user_model().objects.create_user(email="alpha.user@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=tenant, status=TenantMembership.Status.ACTIVE)
+
+    response = tenant_login(Client(), "alpha.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TENANT_UNAVAILABLE"
+    assert not SecuritySession.objects.filter(user=user).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "testserver"])
+def test_tenant_login_rejects_browser_supplied_database_selector(db):
+    alpha = create_login_tenant("alpha")
+    user = get_user_model().objects.create_user(email="alpha.user@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=alpha, status=TenantMembership.Status.ACTIVE)
+
+    response = tenant_login(Client(), "alpha.localhost", user.email, "StrongerPass123!", {"database_name": "lattice_beta"})
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TENANT_ACCESS_DENIED"
+    assert not SecuritySession.objects.filter(user=user).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "testserver"])
+def test_tenant_role_requiring_mfa_blocks_password_only_login(db):
+    alpha = create_login_tenant("alpha")
+    user = get_user_model().objects.create_user(email="tenant.admin@example.test", password="StrongerPass123!")
+    membership = TenantMembership.objects.create(user=user, tenant=alpha, status=TenantMembership.Status.ACTIVE)
+    role = Role.objects.create(code="TENANT_ADMIN", name="Tenant Admin", scope=Role.Scope.TENANT, requires_mfa=True)
+    MembershipRole.objects.create(membership=membership, role=role)
+
+    response = tenant_login(Client(), "alpha.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "MFA_REQUIRED"
+    assert not SecuritySession.objects.filter(user=user).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "testserver"])
+def test_tenant_session_bound_to_alpha_cannot_access_beta_tenant_api(db):
+    alpha = create_login_tenant("alpha")
+    beta = create_login_tenant("beta")
+    user = get_user_model().objects.create_user(email="multi@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=alpha, status=TenantMembership.Status.ACTIVE)
+    TenantMembership.objects.create(user=user, tenant=beta, status=TenantMembership.Status.ACTIVE)
+    client = Client()
+    assert tenant_login(client, "alpha.localhost", user.email, "StrongerPass123!").status_code == 200
+
+    response = client.get("/api/v1/tenant/probe/", HTTP_HOST="beta.localhost")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TenantResolutionError"
 
 
 def test_invalid_password_is_denied_and_audited_without_password(db):

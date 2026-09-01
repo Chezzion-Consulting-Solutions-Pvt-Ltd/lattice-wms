@@ -67,11 +67,19 @@ class Tenant(TimeStampedModel):
 
 
 class TenantDomain(TimeStampedModel):
+    class VerificationMethod(models.TextChoices):
+        DNS_TXT = "DNS_TXT", "DNS TXT"
+        HTTP_FILE = "HTTP_FILE", "HTTP file"
+        LOCAL_DEVELOPMENT = "LOCAL_DEVELOPMENT", "Local development"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="domains")
     hostname = models.CharField(max_length=253, unique=True)
     is_primary = models.BooleanField(default=False)
     verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    verification_method = models.CharField(max_length=32, choices=VerificationMethod.choices, default=VerificationMethod.DNS_TXT)
+    verified_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [

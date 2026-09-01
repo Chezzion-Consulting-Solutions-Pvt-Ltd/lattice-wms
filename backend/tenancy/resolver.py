@@ -31,10 +31,10 @@ class TenantResolver:
 
     def resolve_request(self, request) -> ResolvedTenant:
         self._reject_database_selector_attempts(request)
-        hostname = request.get_host().split(":", 1)[0].lower()
+        hostname = normalize_hostname(request.get_host())
         domain = (
             TenantDomain.objects.select_related("tenant", "tenant__database")
-            .filter(hostname=hostname, verified=True)
+            .filter(hostname=hostname, verified=True, is_active=True)
             .first()
         )
         if domain is None:
@@ -66,3 +66,8 @@ class TenantResolver:
             raise TenantResolutionError("Client-supplied database selectors are not allowed.")
         if any(header in request.META for header in UNTRUSTED_DB_HEADERS):
             raise TenantResolutionError("Client-supplied tenant database headers are not allowed.")
+
+
+def normalize_hostname(host: str) -> str:
+    hostname = (host or "").split(":", 1)[0].strip().lower().rstrip(".")
+    return hostname

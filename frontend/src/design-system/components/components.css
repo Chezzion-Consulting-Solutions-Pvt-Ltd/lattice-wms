@@ -1,12 +1,40 @@
+.lattice-brand-logo {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.lattice-brand-logo img {
+  display: block;
+  width: min(190px, 100%);
+  height: auto;
+  max-height: 72px;
+  object-fit: contain;
+}
+
+.lattice-brand-logo--compact img {
+  width: min(140px, 100%);
+  max-height: 48px;
+}
+
+.lattice-brand-logo__fallback {
+  color: var(--lattice-primary);
+  font-size: var(--lattice-text-h2);
+  font-weight: var(--lattice-weight-bold);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .lattice-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--lattice-space-2);
-  min-height: 40px;
+  min-height: 30px;
   border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 0 var(--lattice-space-4);
+  border-radius: var(--lattice-radius-sm);
+  padding: 0 var(--lattice-space-3);
   cursor: pointer;
   font-size: var(--lattice-text-body-small);
   font-weight: var(--lattice-weight-semibold);
@@ -25,7 +53,7 @@
 }
 
 .lattice-button--secondary {
-  background: var(--lattice-glass-background-strong);
+  background: var(--lattice-surface);
   border-color: var(--lattice-border-strong);
   color: var(--lattice-text-primary);
 }
@@ -53,11 +81,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   border: 1px solid var(--lattice-border);
-  border-radius: 999px;
-  background: var(--lattice-glass-background-strong);
+  border-radius: var(--lattice-radius-sm);
+  background: var(--lattice-surface);
   color: var(--lattice-text-secondary);
   cursor: pointer;
   box-shadow: var(--lattice-shadow-sm);
@@ -66,7 +94,7 @@
 .lattice-card {
   border: 1px solid var(--lattice-border);
   border-radius: var(--lattice-radius-lg);
-  padding: var(--lattice-space-6);
+  padding: var(--lattice-space-4);
   background: var(--lattice-surface);
   box-shadow: var(--lattice-shadow-sm);
 }
@@ -76,20 +104,47 @@
   background: var(--lattice-glass-background-strong);
   box-shadow: var(--lattice-glass-shadow);
   backdrop-filter: blur(var(--lattice-glass-blur));
+  color: var(--lattice-text-inverse);
 }
 
 .lattice-card h2 {
   margin: 0 0 var(--lattice-space-3);
   font-size: var(--lattice-text-card-title);
+  font-weight: var(--lattice-weight-medium);
+}
+
+.lattice-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--lattice-space-4);
+  margin-bottom: var(--lattice-space-3);
+}
+
+.lattice-card__header h2 {
+  margin-bottom: var(--lattice-space-1);
+}
+
+.lattice-card__header p {
+  margin: 0;
+  color: inherit;
+  opacity: 0.78;
+}
+
+.lattice-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--lattice-space-2);
+  flex: 0 0 auto;
 }
 
 .lattice-stat-card {
   display: grid;
   gap: var(--lattice-space-2);
-  min-height: 94px;
+  min-height: 78px;
   border: 1px solid var(--lattice-border);
   border-radius: var(--lattice-radius-lg);
-  padding: var(--lattice-space-4);
+  padding: var(--lattice-space-3);
   background: var(--lattice-surface);
   box-shadow: var(--lattice-shadow-sm);
 }
@@ -101,6 +156,7 @@
   background: var(--lattice-glass-background-strong);
   box-shadow: var(--lattice-glass-shadow);
   backdrop-filter: blur(var(--lattice-glass-blur));
+  color: var(--lattice-text-inverse);
 }
 
 .lattice-stat-card--glass::before {
@@ -138,14 +194,14 @@
 }
 
 .lattice-stat-card__label {
-  color: var(--lattice-text-secondary);
+  color: var(--lattice-text-inverse-muted);
   font-size: var(--lattice-text-caption);
   font-weight: var(--lattice-weight-semibold);
   text-transform: uppercase;
 }
 
 .lattice-stat-card__value {
-  color: var(--lattice-text-primary);
+  color: currentColor;
   font-size: var(--lattice-text-h3);
   font-weight: var(--lattice-weight-bold);
 }
@@ -198,7 +254,7 @@
 .lattice-table-toolbar {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: var(--lattice-space-3);
+  margin-bottom: var(--lattice-space-2);
 }
 
 .lattice-table-wrap {
@@ -208,7 +264,7 @@
   overflow-x: auto;
   border: 1px solid var(--lattice-border);
   border-radius: var(--lattice-radius-lg);
-  background: var(--lattice-glass-background-strong);
+  background: var(--lattice-surface-secondary);
   box-shadow: var(--lattice-shadow-sm);
 }
 
@@ -221,12 +277,12 @@
 .lattice-table th,
 .lattice-table td {
   border-bottom: 1px solid var(--lattice-border);
-  padding: var(--lattice-space-3);
+  padding: var(--lattice-space-2);
   text-align: left;
 }
 
 .lattice-table th {
-  background: var(--lattice-glass-background);
+  background: var(--lattice-info-background);
   color: var(--lattice-text-secondary);
   font-size: var(--lattice-text-table-header);
   font-weight: var(--lattice-weight-bold);
@@ -236,6 +292,7 @@
 .lattice-table td {
   color: var(--lattice-text-primary);
   font-size: var(--lattice-text-table-body);
+  background: var(--lattice-surface-secondary);
 }
 
 .lattice-pagination {
@@ -290,11 +347,11 @@
 .lattice-select,
 .lattice-textarea {
   width: 100%;
-  min-height: 42px;
+  min-height: 34px;
   border: 1px solid var(--lattice-border-strong);
-  border-radius: var(--lattice-radius-lg);
+  border-radius: var(--lattice-radius-sm);
   padding: 0 var(--lattice-space-3);
-  background: var(--lattice-glass-background-strong);
+  background: var(--lattice-surface);
   color: var(--lattice-text-primary);
 }
 
@@ -330,7 +387,7 @@
   border: 1px solid var(--lattice-glass-border);
   border-radius: var(--lattice-radius-xl);
   padding: var(--lattice-space-6);
-  background: var(--lattice-glass-background-strong);
+  background: var(--lattice-surface);
   box-shadow: var(--lattice-glass-shadow);
   backdrop-filter: blur(var(--lattice-glass-blur));
   transform: translate(-50%, -50%);
@@ -504,6 +561,15 @@
 }
 
 @media (max-width: 720px) {
+  .lattice-brand-logo img {
+    width: min(150px, 100%);
+    max-height: 52px;
+  }
+
+  .lattice-brand-logo__fallback {
+    font-size: var(--lattice-text-h3);
+  }
+
   .lattice-button {
     width: 100%;
     min-height: 42px;
@@ -576,6 +642,14 @@
   .lattice-pagination {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .lattice-dialog {
+    top: var(--lattice-space-4);
+    bottom: var(--lattice-space-4);
+    max-height: calc(100vh - var(--lattice-space-8));
+    overflow-y: auto;
+    transform: translateX(-50%);
   }
 
   .lattice-pagination div {

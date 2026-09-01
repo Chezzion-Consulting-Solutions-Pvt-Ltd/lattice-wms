@@ -40,6 +40,8 @@ class Plant(TimeStampedModel):
     contact_name = models.CharField(max_length=160, blank=True)
     contact_phone = models.CharField(max_length=40, blank=True)
     contact_email = models.EmailField(blank=True)
+    created_by_user_id = models.UUIDField(null=True, blank=True)
+    updated_by_user_id = models.UUIDField(null=True, blank=True)
 
     def __str__(self) -> str:
         return self.plant_code
@@ -64,10 +66,42 @@ class Warehouse(models.Model):
     capacity_metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(default=django_timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    created_by_user_id = models.UUIDField(null=True, blank=True)
+    updated_by_user_id = models.UUIDField(null=True, blank=True)
 
     @property
     def warehouse_code(self) -> str:
         return self.code
+
+
+class ProductCategory(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category_code = models.CharField(max_length=40, unique=True)
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    parent_category = models.ForeignKey("self", on_delete=models.PROTECT, related_name="child_categories", null=True, blank=True)
+    status = models.CharField(max_length=24, choices=LifecycleStatus.choices, default=LifecycleStatus.ACTIVE)
+    created_by_user_id = models.UUIDField(null=True, blank=True)
+    updated_by_user_id = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["category_code"]
+
+    def __str__(self) -> str:
+        return self.category_code
+
+    def clean(self):
+        if not self.parent_category_id:
+            return
+        if self.pk and self.parent_category_id == self.pk:
+            raise ValidationError({"parent_category": "Category cannot be its own parent."})
+        ancestor = self.parent_category
+        seen = {self.pk} if self.pk else set()
+        while ancestor is not None:
+            if ancestor.pk in seen:
+                raise ValidationError({"parent_category": "Category hierarchy cannot contain a cycle."})
+            seen.add(ancestor.pk)
+            ancestor = ancestor.parent_category
 
 
 class WarehouseScopedObject(models.Model):
@@ -108,6 +142,8 @@ class Zone(TimeStampedModel):
     status = models.CharField(max_length=24, choices=LifecycleStatus.choices, default=LifecycleStatus.ACTIVE)
     description = models.TextField(blank=True)
     sequence = models.PositiveIntegerField(default=0)
+    created_by_user_id = models.UUIDField(null=True, blank=True)
+    updated_by_user_id = models.UUIDField(null=True, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["warehouse", "zone_code"], name="unique_zone_code_per_warehouse")]
@@ -122,6 +158,8 @@ class StorageType(TimeStampedModel):
     status = models.CharField(max_length=24, choices=LifecycleStatus.choices, default=LifecycleStatus.ACTIVE)
     capacity_rules = models.JSONField(default=dict, blank=True)
     handling_rules = models.JSONField(default=dict, blank=True)
+    created_by_user_id = models.UUIDField(null=True, blank=True)
+    updated_by_user_id = models.UUIDField(null=True, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["warehouse", "storage_type_code"], name="unique_storage_type_code_per_warehouse")]
@@ -131,12 +169,14 @@ class StorageSection(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name="sections")
     zone = models.ForeignKey(Zone, on_delete=models.PROTECT, related_name="sections")
-    storage_type = models.ForeignKey(StorageType, on_delete=models.PROTECT, related_name="sections")
+    storage_type = models.ForeignKey(StorageType, on_delete=models.PROTECT, related_name="sections", null=True, blank=True)
     section_code = models.CharField(max_length=40)
     name = models.CharField(max_length=160)
     status = models.CharField(max_length=24, choices=LifecycleStatus.choices, default=LifecycleStatus.ACTIVE)
     sequence = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
+    created_by_user_id = models.UUIDField(null=True, blank=True)
+    updated_by_user_id = models.UUIDField(null=True, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["warehouse", "section_code"], name="unique_section_code_per_warehouse")]
@@ -152,7 +192,7 @@ class Bin(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name="bins")
     zone = models.ForeignKey(Zone, on_delete=models.PROTECT, related_name="bins")
-    storage_type = models.ForeignKey(StorageType, on_delete=models.PROTECT, related_name="bins")
+    storage_type = models.ForeignKey(StorageType, on_delete=models.PROTECT, related_name="bins", null=True, blank=True)
     section = models.ForeignKey(StorageSection, on_delete=models.PROTECT, related_name="bins", null=True, blank=True)
     bin_code = models.CharField(max_length=80)
     barcode = models.CharField(max_length=120, blank=True)
@@ -168,6 +208,8 @@ class Bin(TimeStampedModel):
     is_putaway_allowed = models.BooleanField(default=True)
     is_blocked = models.BooleanField(default=False)
     is_countable = models.BooleanField(default=True)
+    created_by_user_id = models.UUIDField(null=True, blank=True)
+    updated_by_user_id = models.UUIDField(null=True, blank=True)
 
     class Meta:
         constraints = [

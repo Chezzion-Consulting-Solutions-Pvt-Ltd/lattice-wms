@@ -20,8 +20,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.models import AuditEvent
+from control.models import Tenant, TenantDomain, TenantMembership
 from identity.audit import record_security_event
 from identity.models import MfaDevice, PasswordResetToken, RecoveryCode, SecuritySession
+from tenancy.exceptions import TenantResolutionError
+from tenancy.resolver import normalize_hostname
 
 
 class LoginView(APIView):
@@ -31,8 +34,11 @@ class LoginView(APIView):
     def post(self, request):
         email = str(request.data.get("email", "")).strip().lower()
         password = str(request.data.get("password", ""))
+        tenant = _resolve_login_tenant_or_none(request)
+        if isinstance(tenant, Response):
+            return tenant
         if _ip_throttle_exceeded(request):
-            record_security_event(request, action="LOGIN_THROTTLED", result=AuditEvent.Result.DENIED, failure_reason="ip_rate_limit")
+            record_security_event(request, action="LOGIN_THROTTLED", result=AuditEvent.Result.DENIED, tenant_id=getattr(tenant, "id", None), failure_reason="ip_rate_limit")
             return Response({"error": {"code": "LOGIN_THROTTLED", "message": "Too many login attempts."}}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         candidate_user = get_user_model().objects.filter(email=email).first() if email else None
         if candidate_user and candidate_user.locked_until and candidate_user.locked_until > timezone.now():
@@ -41,6 +47,7 @@ class LoginView(APIView):
                 action="LOGIN_FAILED",
                 result=AuditEvent.Result.DENIED,
                 user_id=candidate_user.id,
+                tenant_id=getattr(tenant, "id", None),
                 failure_reason="account_locked",
             )
             return Response({"error": {"code": "ACCOUNT_LOCKED", "message": "Account temporarily locked."}}, status=status.HTTP_423_LOCKED)
@@ -54,31 +61,68 @@ class LoginView(APIView):
                     action="LOGIN_FAILED",
                     result=AuditEvent.Result.DENIED,
                     user_id=disabled_user.id,
+                    tenant_id=getattr(tenant, "id", None),
                     failure_reason="account_disabled",
                 )
                 return Response(
                     {"error": {"code": "ACCOUNT_DISABLED", "message": "Account disabled."}},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            record_security_event(request, action="LOGIN_FAILED", result=AuditEvent.Result.DENIED, failure_reason="invalid_credentials")
+            record_security_event(request, action="LOGIN_FAILED", result=AuditEvent.Result.DENIED, tenant_id=getattr(tenant, "id", None), failure_reason="invalid_credentials")
             return Response({"error": {"code": "INVALID_LOGIN", "message": "Invalid credentials."}}, status=status.HTTP_403_FORBIDDEN)
         if not user.is_active:
-            record_security_event(request, action="LOGIN_FAILED", result=AuditEvent.Result.DENIED, user_id=user.id, failure_reason="account_disabled")
+            record_security_event(request, action="LOGIN_FAILED", result=AuditEvent.Result.DENIED, user_id=user.id, tenant_id=getattr(tenant, "id", None), failure_reason="account_disabled")
             return Response({"error": {"code": "ACCOUNT_DISABLED", "message": "Account disabled."}}, status=status.HTTP_403_FORBIDDEN)
+        membership = _validate_tenant_membership(request, user, tenant)
+        if isinstance(membership, Response):
+            return membership
         device = getattr(user, "mfa_device", None)
-        if _privileged_requires_mfa(user) and (device is None or not device.enabled):
-            record_security_event(request, action="LOGIN_FAILED", result=AuditEvent.Result.DENIED, user_id=user.id, failure_reason="mfa_required")
+        if _privileged_requires_mfa(user, tenant=tenant) and (device is None or not device.enabled):
+            record_security_event(request, action="LOGIN_FAILED", result=AuditEvent.Result.DENIED, user_id=user.id, tenant_id=getattr(tenant, "id", None), failure_reason="mfa_required")
             return Response({"error": {"code": "MFA_REQUIRED", "message": "MFA challenge required."}}, status=status.HTTP_403_FORBIDDEN)
         if device and device.enabled:
             request.session["pending_mfa_user_id"] = str(user.id)
-            record_security_event(request, action="LOGIN_FAILED", result=AuditEvent.Result.DENIED, user_id=user.id, failure_reason="mfa_challenge")
+            if tenant is not None:
+                request.session["pending_mfa_tenant_id"] = str(tenant.id)
+            else:
+                request.session.pop("pending_mfa_tenant_id", None)
+            record_security_event(request, action="LOGIN_FAILED", result=AuditEvent.Result.DENIED, user_id=user.id, tenant_id=getattr(tenant, "id", None), failure_reason="mfa_challenge")
             return Response({"error": {"code": "MFA_REQUIRED", "message": "MFA challenge required."}}, status=status.HTTP_202_ACCEPTED)
 
         login(request, user)
-        _track_session(request, user)
+        _bind_session_tenant(request, tenant)
+        _track_session(request, user, tenant=tenant)
         _clear_login_failures(request, user)
-        record_security_event(request, action="LOGIN_SUCCESS", result=AuditEvent.Result.SUCCESS, user_id=user.id)
+        record_security_event(
+            request,
+            action="TENANT_LOGIN_SUCCESS" if tenant else "LOGIN_SUCCESS",
+            result=AuditEvent.Result.SUCCESS,
+            user_id=user.id,
+            tenant_id=getattr(tenant, "id", None),
+        )
         return Response(_serialize_user(user))
+
+
+class LoginContextView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = "standard_api"
+
+    def get(self, request):
+        tenant = _resolve_login_tenant_or_none(request)
+        if isinstance(tenant, Response):
+            return tenant
+        if tenant is None:
+            return Response({"mode": "owner", "title": "Owner Console"})
+        return Response(
+            {
+                "mode": "tenant",
+                "tenant": {
+                    "tenant_code": tenant.tenant_code,
+                    "display_name": tenant.display_name,
+                    "status": tenant.status,
+                },
+            }
+        )
 
 
 class LogoutView(APIView):
@@ -91,7 +135,8 @@ class LogoutView(APIView):
                 revoked_at=timezone.now(),
                 revoke_reason="logout",
             )
-        record_security_event(request, action="LOGOUT", result=AuditEvent.Result.SUCCESS, user_id=request.user.id)
+        tenant_id = request.session.get("tenant_id")
+        record_security_event(request, action="TENANT_LOGOUT" if tenant_id else "LOGOUT", result=AuditEvent.Result.SUCCESS, user_id=request.user.id, tenant_id=tenant_id)
         logout(request)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -246,10 +291,16 @@ class MfaVerifyView(APIView):
             device.confirmed_at = timezone.now()
             device.save(update_fields=["enabled", "confirmed_at", "updated_at"])
         if not getattr(request.user, "is_authenticated", False):
+            tenant = _pending_mfa_tenant(request)
+            membership = _validate_tenant_membership(request, user, tenant)
+            if isinstance(membership, Response):
+                return membership
             login(request, user)
-            _track_session(request, user)
+            _bind_session_tenant(request, tenant)
+            _track_session(request, user, tenant=tenant)
             request.session.pop("pending_mfa_user_id", None)
-        record_security_event(request, action="MFA_VERIFIED", result=AuditEvent.Result.SUCCESS, user_id=user.id)
+            request.session.pop("pending_mfa_tenant_id", None)
+        record_security_event(request, action="MFA_VERIFIED", result=AuditEvent.Result.SUCCESS, user_id=user.id, tenant_id=request.session.get("tenant_id"))
         return Response(_serialize_user(user))
 
 
@@ -277,7 +328,7 @@ class RecoveryCodeRegenerateView(APIView):
 
 
 def _serialize_user(user) -> dict[str, object]:
-    return {
+    data = {
         "id": str(user.id),
         "email": user.email,
         "first_name": user.first_name,
@@ -285,9 +336,10 @@ def _serialize_user(user) -> dict[str, object]:
         "is_staff": user.is_staff,
         "is_platform_admin": user.is_platform_admin,
     }
+    return data
 
 
-def _track_session(request, user) -> None:
+def _track_session(request, user, *, tenant: Tenant | None = None) -> None:
     if not request.session.session_key:
         request.session.save()
     session_key = request.session.session_key
@@ -296,6 +348,7 @@ def _track_session(request, user) -> None:
         session_key_hash=SecuritySession.hash_session_key(session_key),
         defaults={
             "user": user,
+            "tenant": tenant,
             "expires_at": timezone.now() + timezone.timedelta(seconds=expiry_age),
             "ip_address": request.META.get("REMOTE_ADDR"),
             "user_agent": request.META.get("HTTP_USER_AGENT", "")[:1000],
@@ -303,9 +356,11 @@ def _track_session(request, user) -> None:
     )
 
 
-def _privileged_requires_mfa(user) -> bool:
+def _privileged_requires_mfa(user, *, tenant: Tenant | None = None) -> bool:
     if user.is_platform_admin or user.is_superuser:
         return True
+    if tenant is not None:
+        return user.memberships.filter(tenant=tenant, role_assignments__role__requires_mfa=True).exists()
     return user.memberships.filter(role_assignments__role__requires_mfa=True).exists()
 
 
@@ -350,6 +405,74 @@ def _pending_mfa_user(request):
     if not user_id:
         return None
     return get_user_model().objects.filter(id=user_id, is_active=True).first()
+
+
+def _pending_mfa_tenant(request):
+    tenant_id = request.session.get("pending_mfa_tenant_id")
+    if not tenant_id:
+        return None
+    return Tenant.objects.filter(id=tenant_id, status=Tenant.Status.ACTIVE).first()
+
+
+def _bind_session_tenant(request, tenant: Tenant | None) -> None:
+    if tenant is None:
+        request.session.pop("tenant_id", None)
+        request.session.pop("tenant_code", None)
+        return
+    request.session["tenant_id"] = str(tenant.id)
+    request.session["tenant_code"] = tenant.tenant_code
+
+
+def _resolve_login_tenant_or_none(request):
+    try:
+        _reject_login_database_selector_attempts(request)
+    except TenantResolutionError:
+        record_security_event(request, action="TENANT_ACCESS_DENIED", result=AuditEvent.Result.DENIED, failure_reason="client_supplied_database_selector")
+        return Response({"error": {"code": "TENANT_ACCESS_DENIED", "message": "Tenant access denied."}}, status=status.HTTP_403_FORBIDDEN)
+
+    hostname = normalize_hostname(request.get_host())
+    domain = TenantDomain.objects.select_related("tenant").filter(hostname=hostname).first()
+    if domain is None:
+        if hostname in _owner_hosts():
+            return None
+        record_security_event(request, action="TENANT_ACCESS_DENIED", result=AuditEvent.Result.DENIED, failure_reason="unknown_tenant_domain")
+        return Response({"error": {"code": "UNKNOWN_TENANT_DOMAIN", "message": "Tenant access denied."}}, status=status.HTTP_403_FORBIDDEN)
+    if not domain.verified or not domain.is_active:
+        record_security_event(request, action="TENANT_ACCESS_DENIED", result=AuditEvent.Result.DENIED, tenant_id=domain.tenant_id, failure_reason="domain_not_verified_or_inactive")
+        return Response({"error": {"code": "TENANT_DOMAIN_UNAVAILABLE", "message": "Tenant access denied."}}, status=status.HTTP_403_FORBIDDEN)
+    if domain.tenant.status != Tenant.Status.ACTIVE:
+        record_security_event(request, action="TENANT_ACCESS_DENIED", result=AuditEvent.Result.DENIED, tenant_id=domain.tenant_id, failure_reason="tenant_not_active")
+        return Response({"error": {"code": "TENANT_UNAVAILABLE", "message": "Tenant access denied."}}, status=status.HTTP_403_FORBIDDEN)
+    return domain.tenant
+
+
+def _validate_tenant_membership(request, user, tenant: Tenant | None):
+    if tenant is None:
+        return None
+    membership = TenantMembership.objects.filter(user=user, tenant=tenant).first()
+    if membership is None:
+        record_security_event(request, action="TENANT_MEMBERSHIP_DENIED", result=AuditEvent.Result.DENIED, user_id=user.id, tenant_id=tenant.id, failure_reason="missing_membership")
+        return Response({"error": {"code": "TENANT_MEMBERSHIP_REQUIRED", "message": "Tenant access denied."}}, status=status.HTTP_403_FORBIDDEN)
+    if membership.status != TenantMembership.Status.ACTIVE:
+        record_security_event(request, action="TENANT_MEMBERSHIP_DENIED", result=AuditEvent.Result.DENIED, user_id=user.id, tenant_id=tenant.id, failure_reason="membership_not_active")
+        return Response({"error": {"code": "TENANT_MEMBERSHIP_INACTIVE", "message": "Tenant access denied."}}, status=status.HTTP_403_FORBIDDEN)
+    return membership
+
+
+def _reject_login_database_selector_attempts(request) -> None:
+    from tenancy.resolver import UNTRUSTED_DB_HEADERS, UNTRUSTED_DB_QUERY_KEYS
+
+    query_keys = {key.lower() for key in request.GET.keys()}
+    body_keys = {str(key).lower() for key in getattr(request, "data", {}).keys()}
+    if query_keys & UNTRUSTED_DB_QUERY_KEYS or body_keys & UNTRUSTED_DB_QUERY_KEYS:
+        raise TenantResolutionError("Client-supplied database selectors are not allowed.")
+    if any(header in request.META for header in UNTRUSTED_DB_HEADERS):
+        raise TenantResolutionError("Client-supplied tenant database headers are not allowed.")
+
+
+def _owner_hosts() -> set[str]:
+    configured = getattr(settings, "LATTICE_OWNER_HOSTS", "")
+    return {normalize_hostname(host) for host in str(configured).split(",") if host.strip()}
 
 
 def _consume_recovery_code(user, raw_code: str) -> bool:

@@ -12,18 +12,23 @@ import {
   Warehouse,
 } from 'lucide-react';
 import type { MouseEvent, ReactNode } from 'react';
+import { BrandLogo } from '../components/BrandLogo';
 import { IconButton } from '../components/Button';
 import { DropdownItem, DropdownMenu, Tooltip } from '../components/Overlays';
 import './layouts.css';
 
 const clientNavItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
-  { label: 'Masters', icon: Boxes, href: '/' },
-  { label: 'Inbound', icon: ClipboardList, href: '/' },
-  { label: 'Inventory', icon: Warehouse, href: '/' },
-  { label: 'Outbound', icon: Warehouse, href: '/' },
-  { label: 'Administration', icon: Shield, href: '/' },
-  { label: 'Settings', icon: Settings, href: '/' },
+  { label: 'Dashboard', icon: LayoutDashboard, href: '/tenant/dashboard' },
+  { label: 'Product Categories', icon: Boxes, href: '/tenant/product-categories' },
+  { label: 'Plants', icon: Boxes, href: '/tenant/plants' },
+  { label: 'Warehouses', icon: Warehouse, href: '/tenant/warehouses' },
+  { label: 'Zones', icon: Database, href: '/tenant/zones' },
+  { label: 'Storage Types', icon: Boxes, href: '/tenant/storage-types' },
+  { label: 'Sections', icon: ClipboardList, href: '/tenant/storage-sections' },
+  { label: 'Bins', icon: Database, href: '/tenant/bins' },
+  { label: 'Hierarchy', icon: Boxes, href: '/tenant/hierarchy' },
+  { label: 'Users & Access', icon: Shield, href: '/tenant/users-access' },
+  { label: 'Settings', icon: Settings, href: '/tenant/settings' },
 ];
 
 const ownerNavItems = [
@@ -39,10 +44,18 @@ const ownerNavItems = [
 ];
 
 function navigateWithinApp(event: MouseEvent<HTMLAnchorElement>, href: string) {
-  if (!href.startsWith('/owner/')) {
+  if (!href.startsWith('/owner/') && !href.startsWith('/tenant/')) {
     return;
   }
   event.preventDefault();
+  window.history.pushState(null, '', href);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+function navigateToAppPage(href: string) {
+  if (!href.startsWith('/owner/') && !href.startsWith('/tenant/')) {
+    return;
+  }
   window.history.pushState(null, '', href);
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
@@ -56,6 +69,8 @@ export function AppShell({
   profileDescription = 'Owner Console',
   activeHref,
   onLogout,
+  profileHref,
+  securityHref,
 }: {
   title: string;
   children: ReactNode;
@@ -65,14 +80,20 @@ export function AppShell({
   profileDescription?: string;
   activeHref?: string;
   onLogout?: () => void;
+  profileHref?: string;
+  securityHref?: string;
 }) {
   const navItems = mode === 'owner' ? ownerNavItems : clientNavItems;
+  const resolvedProfileHref = profileHref ?? (mode === 'owner' ? '/owner/profile' : '/tenant/profile');
+  const resolvedSecurityHref = securityHref ?? (mode === 'owner' ? '/owner/security-settings' : '/tenant/security-settings');
 
   return (
     <div className="lattice-shell">
       <aside className="lattice-sidebar" aria-label="Primary navigation">
         <div>
-          <div className="lattice-sidebar__mark">Lattice</div>
+          <div className="lattice-sidebar__mark">
+            <BrandLogo />
+          </div>
           <nav className="lattice-nav">
             {navItems.map((item, index) => {
               const Icon = item.icon;
@@ -113,8 +134,8 @@ export function AppShell({
                 </button>
               }
             >
-              <DropdownItem>Profile</DropdownItem>
-              <DropdownItem>Security settings</DropdownItem>
+              <DropdownItem onSelect={() => navigateToAppPage(resolvedProfileHref)}>Profile</DropdownItem>
+              <DropdownItem onSelect={() => navigateToAppPage(resolvedSecurityHref)}>Security settings</DropdownItem>
               {onLogout ? <DropdownItem onSelect={onLogout}>Log out</DropdownItem> : null}
             </DropdownMenu>
           </div>

@@ -10,6 +10,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
 BASE_DOMAIN = os.environ.get("BASE_DOMAIN", "localhost")
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
+LATTICE_OWNER_HOSTS = os.environ.get("LATTICE_OWNER_HOSTS", "localhost,127.0.0.1,testserver")
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
 

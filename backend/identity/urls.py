@@ -2,6 +2,7 @@ from django.urls import path
 
 from identity.views import (
     LoginView,
+    LoginContextView,
     LogoutView,
     MeView,
     MfaDisableView,
@@ -16,6 +17,7 @@ from identity.views import (
 )
 
 urlpatterns = [
+    path("login/context/", LoginContextView.as_view(), name="login-context"),
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("password/reset/request/", PasswordResetRequestView.as_view(), name="password-reset-request"),

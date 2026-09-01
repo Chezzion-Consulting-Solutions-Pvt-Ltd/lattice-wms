@@ -104,3 +104,6 @@ Lattice is desktop-first for enterprise warehouse operations. Smaller screens sh
 - Use accessible names for icon-only buttons.
 - Do not use color alone to convey status.
 - Preserve reasonable contrast when replacing provisional tokens with Figma values.
+## Tenant Admin UI
+
+Tenant admin pages reuse the shared Lattice shell, cards, buttons, dialogs, data tables, form fields, status badges, and centralized tokens. Hierarchy screens keep dense records in readable tables and use tokenized glass styling selectively for the shell and summary cards.

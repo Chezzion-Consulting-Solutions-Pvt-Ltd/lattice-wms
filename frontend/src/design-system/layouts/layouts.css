@@ -1,13 +1,13 @@
 .lattice-shell {
   display: grid;
-  grid-template-columns: calc(var(--lattice-sidebar-width) + var(--lattice-space-8)) minmax(0, 1fr);
+  grid-template-columns: var(--lattice-sidebar-width) minmax(0, 1fr);
   width: 100%;
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
   background:
-    linear-gradient(145deg, var(--lattice-app-background-accent), transparent 42%),
-    linear-gradient(180deg, var(--lattice-app-background), var(--lattice-surface-secondary));
+    radial-gradient(circle at 72% 8%, var(--lattice-app-background-accent), transparent 24%),
+    linear-gradient(145deg, var(--lattice-background), var(--lattice-app-background));
 }
 
 .lattice-sidebar {
@@ -15,25 +15,25 @@
   flex-direction: column;
   justify-content: space-between;
   gap: var(--lattice-space-6);
-  height: calc(100vh - var(--lattice-space-8));
+  height: 100vh;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--lattice-glass-border);
-  border-radius: var(--lattice-radius-xl);
+  border: 0;
+  border-right: 1px solid var(--lattice-border);
+  border-radius: 0;
   background: var(--lattice-sidebar-background);
-  backdrop-filter: blur(var(--lattice-glass-blur));
   color: var(--lattice-sidebar-text);
-  margin: var(--lattice-space-4);
-  padding: var(--lattice-space-6) var(--lattice-space-4);
-  box-shadow: var(--lattice-glass-shadow);
+  margin: 0;
+  padding: var(--lattice-space-6) var(--lattice-space-5);
+  box-shadow: var(--lattice-shadow-md);
 }
 
 .lattice-sidebar__mark {
   display: flex;
   align-items: center;
-  min-height: 72px;
+  min-height: 84px;
   color: var(--lattice-primary);
-  font-size: var(--lattice-text-h3);
+  font-size: var(--lattice-text-h2);
   font-weight: var(--lattice-weight-bold);
   letter-spacing: 0;
   text-transform: uppercase;
@@ -43,8 +43,8 @@
   display: flex;
   align-items: center;
   gap: var(--lattice-space-3);
-  border: 1px solid var(--lattice-glass-border);
-  border-radius: var(--lattice-radius-xl);
+  border: 1px solid var(--lattice-border);
+  border-radius: var(--lattice-radius-md);
   padding: var(--lattice-space-3);
   background: var(--lattice-glass-background);
   color: var(--lattice-text-primary);
@@ -86,18 +86,18 @@
 
 .lattice-nav {
   display: grid;
-  gap: var(--lattice-space-3);
+  gap: var(--lattice-space-1);
 }
 
 .lattice-nav a {
   display: flex;
   align-items: center;
   gap: var(--lattice-space-3);
-  min-height: 42px;
-  border-radius: 999px;
-  padding: 0 var(--lattice-space-4);
+  min-height: 30px;
+  border-radius: var(--lattice-radius-sm);
+  padding: 0 var(--lattice-space-2);
   color: var(--lattice-sidebar-text);
-  font-size: var(--lattice-text-body-small);
+  font-size: var(--lattice-text-caption);
   text-decoration: none;
 }
 
@@ -106,7 +106,7 @@
 }
 
 .lattice-nav a.active {
-  border: 1px solid var(--lattice-glass-border);
+  border: 1px solid var(--lattice-border);
   background: var(--lattice-sidebar-active);
   color: var(--lattice-primary);
   font-weight: var(--lattice-weight-semibold);
@@ -115,7 +115,7 @@
 
 .lattice-main {
   display: grid;
-  grid-template-rows: var(--lattice-topbar-height) minmax(0, 1fr);
+  grid-template-rows: 52px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -125,15 +125,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: var(--lattice-topbar-height);
-  border: 1px solid var(--lattice-glass-border);
-  border-radius: var(--lattice-radius-xl);
-  padding: 0 var(--lattice-space-5);
-  background: var(--lattice-glass-background);
+  min-height: 52px;
+  border: 0;
+  border-bottom: 1px solid var(--lattice-glass-border);
+  border-radius: 0;
+  padding: 0 var(--lattice-space-6);
+  background: var(--lattice-topbar-background);
   backdrop-filter: blur(var(--lattice-glass-blur));
-  color: var(--lattice-text-primary);
-  box-shadow: var(--lattice-shadow-sm);
-  margin: var(--lattice-space-4) var(--lattice-space-4) 0 0;
+  color: var(--lattice-text-inverse);
+  box-shadow: none;
+  margin: 0;
 }
 
 .lattice-topbar h1,
@@ -142,7 +143,7 @@
 }
 
 .lattice-topbar h1 {
-  font-size: var(--lattice-text-h3);
+  font-size: var(--lattice-text-card-title);
   font-weight: var(--lattice-weight-semibold);
 }
 
@@ -153,11 +154,11 @@
 }
 
 .lattice-user-menu {
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--lattice-border-strong);
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--lattice-glass-border);
   border-radius: 50%;
-  background: var(--lattice-surface-secondary);
+  background: var(--lattice-surface);
   color: var(--lattice-primary);
   cursor: pointer;
   font-size: var(--lattice-text-label);
@@ -165,7 +166,7 @@
 }
 
 .lattice-content {
-  padding: var(--lattice-space-5) var(--lattice-space-4) var(--lattice-space-8) 0;
+  padding: var(--lattice-space-5) var(--lattice-space-6) var(--lattice-space-8);
   min-width: 0;
   min-height: 0;
   max-width: 100%;
@@ -179,7 +180,7 @@
   justify-content: space-between;
   gap: var(--lattice-space-4);
   margin-bottom: var(--lattice-space-5);
-  color: var(--lattice-text-primary);
+  color: var(--lattice-text-inverse);
 }
 
 .lattice-page-header__body {
@@ -198,11 +199,12 @@
 .lattice-page-header h2 {
   margin: 0;
   font-size: var(--lattice-text-h2);
+  font-weight: var(--lattice-weight-medium);
 }
 
 .lattice-page-header p {
   margin: var(--lattice-space-2) 0 0;
-  color: var(--lattice-text-secondary);
+  color: var(--lattice-text-inverse-muted);
 }
 
 @media (max-width: 1100px) {
@@ -226,13 +228,16 @@
     display: grid;
     gap: var(--lattice-space-3);
     height: auto;
-    border-radius: 0 0 var(--lattice-radius-xl) var(--lattice-radius-xl);
+    overflow: visible;
+    border-bottom: 1px solid var(--lattice-border);
+    border-radius: 0;
     margin: 0;
     padding: var(--lattice-space-3) var(--lattice-space-4);
   }
 
   .lattice-sidebar__mark {
     min-height: auto;
+    justify-content: center;
   }
 
   .lattice-nav {
@@ -261,10 +266,19 @@
 
   .lattice-topbar {
     min-height: auto;
-    border-radius: var(--lattice-radius-xl);
-    margin: var(--lattice-space-3) var(--lattice-space-3) 0;
+    border-radius: 0;
+    margin: 0;
     padding-top: var(--lattice-space-3);
     padding-bottom: var(--lattice-space-3);
+  }
+
+  .lattice-topbar > div:first-child {
+    min-width: 0;
+  }
+
+  .lattice-topbar__actions {
+    flex: 0 0 auto;
+    gap: var(--lattice-space-2);
   }
 
   .lattice-topbar h1 {
@@ -273,6 +287,7 @@
 
   .lattice-page-header {
     flex-direction: column;
+    gap: var(--lattice-space-3);
   }
 
   .lattice-content {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -29,7 +30,7 @@ class Command(BaseCommand):
                 tenant=tenant,
                 defaults={
                     "database_alias": f"tenant_{code}",
-                    "database_host_reference": "local-postgres",
+                    "database_host_reference": getattr(settings, "POSTGRES_HOST", os.environ.get("POSTGRES_HOST", "postgres")),
                     "database_name": f"lattice_{code}",
                     "runtime_role_name": f"lattice_{code}_app",
                     "secret_reference": f"env:TENANT_{code.upper()}_DB_PASSWORD",

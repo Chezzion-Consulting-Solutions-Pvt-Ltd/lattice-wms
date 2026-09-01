@@ -58,8 +58,11 @@ type TenantRecord = {
   created_at: string;
   database: {
     alias: string;
+    host_reference: string;
+    port: number;
     name: string;
     runtime_role: string;
+    sslmode: string;
     provisioning_status: string;
     health_status: string;
     migration_version: string;
@@ -98,7 +101,9 @@ type OwnerRoute =
   | 'infrastructure'
   | 'security'
   | 'reports'
-  | 'settings';
+  | 'settings'
+  | 'profile'
+  | 'security-settings';
 
 const ownerRouteMeta: Record<OwnerRoute, { title: string; description: string; href: string }> = {
   dashboard: {
@@ -145,6 +150,16 @@ const ownerRouteMeta: Record<OwnerRoute, { title: string; description: string; h
     title: 'Settings',
     description: 'Owner Console configuration and platform administration preferences.',
     href: '/owner/settings',
+  },
+  profile: {
+    title: 'Profile',
+    description: 'Signed-in platform account, role posture, and console access.',
+    href: '/owner/profile',
+  },
+  'security-settings': {
+    title: 'Security Settings',
+    description: 'MFA posture, secure session behavior, and account protections.',
+    href: '/owner/security-settings',
   },
 };
 
@@ -282,7 +297,7 @@ export function OwnerConsole({
       {activeRoute === 'dashboard' ? (
         <OwnerDashboardPage data={data} health={health} tenantDbIssues={tenantDbIssues} backupIssues={backupIssues} migrationIssues={migrationIssues} tenantRows={tenantRows} />
       ) : (
-        <OwnerSectionPage route={activeRoute} data={data} health={health} onTenantMutated={refreshAfterMutation} selectedTenant={selectedTenant} tenantRows={tenantRows} />
+        <OwnerSectionPage route={activeRoute} data={data} health={health} onTenantMutated={refreshAfterMutation} selectedTenant={selectedTenant} tenantRows={tenantRows} user={user} />
       )}
     </OwnerPageShell>
   );
@@ -406,6 +421,7 @@ function OwnerSectionPage({
   onTenantMutated,
   selectedTenant,
   tenantRows,
+  user,
 }: {
   route: OwnerRoute;
   data: OwnerDashboard;
@@ -413,7 +429,16 @@ function OwnerSectionPage({
   onTenantMutated: () => Promise<void>;
   selectedTenant: TenantRecord | null;
   tenantRows: Array<Record<string, ReactNode>>;
+  user: CurrentUser;
 }) {
+  if (route === 'profile') {
+    return <ProfilePage user={user} mode="owner" />;
+  }
+
+  if (route === 'security-settings') {
+    return <SecuritySettingsPage user={user} mode="owner" />;
+  }
+
   if (route === 'tenants') {
     return (
       <section className="owner-page-grid owner-page-grid--management">
@@ -524,6 +549,59 @@ function OwnerSectionPage({
     </section>
   );
 }
+
+function ProfilePage({ user, mode }: { user: CurrentUser; mode: 'owner' | 'tenant' }) {
+  return (
+    <section className="owner-page-grid">
+      <Card title="Account Profile" variant="glass">
+        <DataTable
+          columns={summaryColumns}
+          rows={[
+            { area: 'Name', value: getDisplayName(user), status: <StatusBadge status="ACTIVE" variant="success" /> },
+            { area: 'Email', value: user.email, status: <StatusBadge status="VERIFIED" variant="success" /> },
+            { area: 'Portal', value: mode === 'owner' ? 'Owner Console' : 'Tenant Portal', status: <StatusBadge status={mode.toUpperCase()} variant="info" /> },
+            { area: 'Platform admin', value: user.is_platform_admin ? 'Yes' : 'No', status: <StatusBadge status={user.is_platform_admin ? 'ENABLED' : 'LIMITED'} variant={user.is_platform_admin ? 'success' : 'warning'} /> },
+            { area: 'Staff access', value: user.is_staff ? 'Yes' : 'No', status: <StatusBadge status={user.is_staff ? 'ALLOWED' : 'TENANT'} variant={user.is_staff ? 'success' : 'info'} /> },
+          ]}
+        />
+      </Card>
+      <Card title="Access Boundary" variant="glass">
+        <p className="owner-page-note">
+          This profile page uses authenticated control-plane identity data. It does not expose tenant database credentials or query tenant WMS transaction data.
+        </p>
+      </Card>
+    </section>
+  );
+}
+
+function SecuritySettingsPage({ user, mode }: { user: CurrentUser; mode: 'owner' | 'tenant' }) {
+  return (
+    <section className="owner-page-grid">
+      <Card title="Security Posture" variant="glass">
+        <DataTable
+          columns={summaryColumns}
+          rows={[
+            { area: 'Authenticated session', value: 'Backend cookie session', status: <StatusBadge status="ACTIVE" variant="success" /> },
+            { area: 'Browser token storage', value: 'No access token stored', status: <StatusBadge status="PROTECTED" variant="success" /> },
+            { area: 'MFA', value: user.is_platform_admin ? 'Required for platform administrators' : 'Available through security enrollment', status: <StatusBadge status={user.is_platform_admin ? 'REQUIRED' : 'AVAILABLE'} variant="warning" /> },
+            { area: 'Portal scope', value: mode === 'owner' ? 'Control-plane operations' : 'Tenant-scoped operations', status: <StatusBadge status="SERVER ENFORCED" variant="success" /> },
+          ]}
+        />
+      </Card>
+      <Card title="Session Controls" variant="glass">
+        <p className="owner-page-note">
+          Logout revokes the backend security session and returns this browser to the login screen for the current portal.
+        </p>
+      </Card>
+    </section>
+  );
+}
+
+const summaryColumns = [
+  { key: 'area', header: 'Area' },
+  { key: 'value', header: 'Value' },
+  { key: 'status', header: 'Status' },
+] satisfies { key: 'area' | 'value' | 'status'; header: string }[];
 
 function TenantHealthTable({
   rows,
@@ -744,6 +822,7 @@ function TenantDetail({ tenant, onUpdated }: { tenant: TenantRecord; onUpdated: 
     <div className="owner-detail-stack">
       <div className="owner-detail-actions">
         <EditTenantDialog tenant={tenant} onUpdated={onUpdated} />
+        <ConfigureTenantDatabaseDialog tenant={tenant} onUpdated={onUpdated} />
       </div>
       <StatusLine label="Tenant code" status={tenant.tenant_code} />
       <StatusLine label="License" status={tenant.license_number} />
@@ -754,10 +833,155 @@ function TenantDetail({ tenant, onUpdated }: { tenant: TenantRecord; onUpdated: 
       <StatusLine label="Region" status={tenant.region || 'UNASSIGNED'} />
       <StatusLine label="Timezone" status={tenant.timezone} />
       <StatusLine label="Database" status={tenant.database?.provisioning_status ?? 'MISSING'} />
+      <StatusLine label="DB alias" status={tenant.database?.alias || 'UNASSIGNED'} />
+      <StatusLine label="DB host reference" status={tenant.database?.host_reference || 'UNASSIGNED'} />
+      <StatusLine label="DB name" status={tenant.database?.name || 'UNASSIGNED'} />
+      <StatusLine label="Runtime role" status={tenant.database?.runtime_role || 'UNASSIGNED'} />
       <StatusLine label="DB health" status={tenant.database?.health_status ?? 'MISSING'} />
       <StatusLine label="Migration" status={tenant.database?.migration_version || 'NOT RECORDED'} />
     </div>
   );
+}
+
+function ConfigureTenantDatabaseDialog({ tenant, onUpdated }: { tenant: TenantRecord; onUpdated: () => Promise<void> }) {
+  const existingDatabase = Boolean(tenant.database?.alias);
+  const [form, setForm] = useState(() => getDatabaseFormDefaults(tenant));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    setForm(getDatabaseFormDefaults(tenant));
+    setMessage('');
+  }, [tenant]);
+
+  const updateForm = (field: keyof ReturnType<typeof getDatabaseFormDefaults>, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage('');
+    const payload: Record<string, string | number> = {
+      database_alias: form.database_alias,
+      database_host_reference: form.database_host_reference,
+      port: Number(form.port || 5432),
+      database_name: form.database_name,
+      runtime_role_name: form.runtime_role_name,
+      sslmode: form.sslmode,
+      migration_version: form.migration_version,
+      provisioning_status: form.provisioning_status,
+      health_status: form.health_status,
+    };
+    if (form.secret_reference || !existingDatabase) {
+      payload.secret_reference = form.secret_reference;
+    }
+    try {
+      await apiFetch(`/api/v1/control/owner/tenants/${tenant.id}/database/`, {
+        body: JSON.stringify(payload),
+        method: 'PUT',
+      });
+      setMessage('Tenant database mapping saved. Runtime selection remains server-side.');
+      await onUpdated();
+    } catch (caught) {
+      if (caught instanceof LatticeApiError) {
+        setMessage(`${caught.code}: ${caught.message}`);
+        return;
+      }
+      setMessage('Unable to save tenant database mapping.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog
+      title="Database Config"
+      description="Registers the trusted control-plane database mapping for this tenant. Submit a secret reference, never a raw password."
+      trigger={
+        <Button variant="secondary" icon={<Database size={16} />}>
+          Database Config
+        </Button>
+      }
+    >
+      <form className="owner-form-grid" onSubmit={submit}>
+        <FormField label="Database alias">
+          <Input required value={form.database_alias} onChange={(event) => updateForm('database_alias', event.target.value)} />
+        </FormField>
+        <FormField label="Host reference">
+          <Input required value={form.database_host_reference} onChange={(event) => updateForm('database_host_reference', event.target.value)} />
+        </FormField>
+        <FormField label="Port">
+          <Input required min={1} max={65535} type="number" value={form.port} onChange={(event) => updateForm('port', event.target.value)} />
+        </FormField>
+        <FormField label="Database name">
+          <Input required value={form.database_name} onChange={(event) => updateForm('database_name', event.target.value)} />
+        </FormField>
+        <FormField label="Runtime role">
+          <Input required value={form.runtime_role_name} onChange={(event) => updateForm('runtime_role_name', event.target.value)} />
+        </FormField>
+        <FormField label={existingDatabase ? 'Secret reference replacement' : 'Secret reference'}>
+          <Input
+            required={!existingDatabase}
+            value={form.secret_reference}
+            onChange={(event) => updateForm('secret_reference', event.target.value)}
+            placeholder={existingDatabase ? 'Leave blank to keep current reference' : 'env:TENANT_CODE_DB_PASSWORD'}
+          />
+        </FormField>
+        <FormField label="SSL mode">
+          <Input required value={form.sslmode} onChange={(event) => updateForm('sslmode', event.target.value)} />
+        </FormField>
+        <FormField label="Provisioning status">
+          <Input required list="tenant-provisioning-statuses" value={form.provisioning_status} onChange={(event) => updateForm('provisioning_status', event.target.value)} />
+        </FormField>
+        <FormField label="Health status">
+          <Input required list="tenant-health-statuses" value={form.health_status} onChange={(event) => updateForm('health_status', event.target.value)} />
+        </FormField>
+        <FormField label="Migration version">
+          <Input value={form.migration_version} onChange={(event) => updateForm('migration_version', event.target.value)} />
+        </FormField>
+        <datalist id="tenant-provisioning-statuses">
+          <option value="PENDING" />
+          <option value="PROVISIONING" />
+          <option value="READY" />
+          <option value="FAILED" />
+        </datalist>
+        <datalist id="tenant-health-statuses">
+          <option value="UNKNOWN" />
+          <option value="HEALTHY" />
+          <option value="DEGRADED" />
+          <option value="UNAVAILABLE" />
+        </datalist>
+        {message ? <p className="owner-form-message">{message}</p> : null}
+        <div className="owner-form-actions">
+          <DialogClose>
+            <Button variant="secondary" type="button">
+              Close
+            </Button>
+          </DialogClose>
+          <Button disabled={saving} type="submit">
+            {saving ? 'Saving' : 'Save Database'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+function getDatabaseFormDefaults(tenant: TenantRecord) {
+  const normalizedCode = tenant.tenant_code.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+  return {
+    database_alias: tenant.database?.alias || `tenant_${normalizedCode}`,
+    database_host_reference: tenant.database?.host_reference || 'postgres',
+    port: String(tenant.database?.port || 5432),
+    database_name: tenant.database?.name || `lattice_${normalizedCode}`,
+    runtime_role_name: tenant.database?.runtime_role || `lattice_${normalizedCode}_app`,
+    secret_reference: '',
+    sslmode: tenant.database?.sslmode || 'prefer',
+    provisioning_status: tenant.database?.provisioning_status && tenant.database.provisioning_status !== 'MISSING' ? tenant.database.provisioning_status : 'PENDING',
+    health_status: tenant.database?.health_status && tenant.database.health_status !== 'MISSING' ? tenant.database.health_status : 'UNKNOWN',
+    migration_version: tenant.database?.migration_version || '',
+  };
 }
 
 function RecentSecurityEvents({ events, limit }: { events: AuditEventRecord[]; limit: number }) {

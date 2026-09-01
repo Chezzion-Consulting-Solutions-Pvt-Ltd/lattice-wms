@@ -3,9 +3,11 @@ import { apiFetch } from './api/client';
 import './app.css';
 import { LoginCheckingPage, LoginPage } from './pages/auth/LoginPage';
 import { OwnerConsole } from './pages/owner/OwnerConsole';
+import { TenantPortal } from './pages/tenant/TenantPortal';
 import type { CurrentUser } from './types';
 
 export function App() {
+  const [requestedPortal] = useState(getRequestedPortal);
   const [authState, setAuthState] = useState<'checking' | 'anonymous' | 'authenticated'>('checking');
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loginNotice, setLoginNotice] = useState('');
@@ -13,7 +15,7 @@ export function App() {
   useEffect(() => {
     apiFetch<CurrentUser>('/api/v1/auth/me/')
       .then((currentUser) => {
-        if (canOpenOwnerConsole(currentUser)) {
+        if (requestedPortal === 'tenant' || canOpenOwnerConsole(currentUser)) {
           setLoginNotice('');
           setUser(currentUser);
           setAuthState('authenticated');
@@ -28,10 +30,10 @@ export function App() {
         setUser(null);
         setAuthState('anonymous');
       });
-  }, []);
+  }, [requestedPortal]);
 
   const handleAuthenticated = (currentUser: CurrentUser) => {
-    if (!canOpenOwnerConsole(currentUser)) {
+    if (requestedPortal === 'owner' && !canOpenOwnerConsole(currentUser)) {
       setLoginNotice('This account is not authorized for the Owner Console.');
       setUser(null);
       setAuthState('anonymous');
@@ -59,9 +61,17 @@ export function App() {
     return <LoginPage notice={loginNotice} onAuthenticated={handleAuthenticated} />;
   }
 
+  if (requestedPortal === 'tenant') {
+    return <TenantPortal user={user} onLogout={handleLogout} />;
+  }
+
   return <OwnerConsole user={user} onAuthorizationLost={handleLogout} onLogout={handleLogout} />;
 }
 
 function canOpenOwnerConsole(user: CurrentUser) {
   return user.is_staff || user.is_platform_admin;
+}
+
+function getRequestedPortal() {
+  return window.location.pathname.startsWith('/tenant') ? 'tenant' : 'owner';
 }

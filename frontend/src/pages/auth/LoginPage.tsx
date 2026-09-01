@@ -1,8 +1,8 @@
 import { LogIn } from 'lucide-react';
-import { FormEvent, ReactNode, useState } from 'react';
-import { LatticeApiError } from '../../api/client';
-import { Badge, Button, FormField, Input, LoadingState, PasswordInput } from '../../design-system';
-import type { CurrentUser } from '../../types';
+import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import { apiFetch, LatticeApiError } from '../../api/client';
+import { Badge, BrandLogo, Button, FormField, Input, LoadingState, PasswordInput } from '../../design-system';
+import type { CurrentUser, LoginContext } from '../../types';
 
 type ApiErrorPayload = {
   error?: {
@@ -17,6 +17,25 @@ export function LoginPage({ notice, onAuthenticated }: { notice?: string; onAuth
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loginContext, setLoginContext] = useState<LoginContext | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    apiFetch<LoginContext>('/api/v1/auth/login/context/')
+      .then((context) => {
+        if (mounted) {
+          setLoginContext(context);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setLoginContext(null);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -41,13 +60,19 @@ export function LoginPage({ notice, onAuthenticated }: { notice?: string; onAuth
     <LoginScreenShell>
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-brand">
-          <span>LATTICE</span>
+          <BrandLogo />
           <Badge variant="success">Secure Core</Badge>
         </div>
         <div className="login-copy">
-          <p className="lattice-caption">Platform access</p>
-          <h1 id="login-title">Sign in to Lattice</h1>
-          <p>Use an authorized platform owner account to continue.</p>
+          <p className="lattice-caption">{loginContext?.mode === 'tenant' ? 'Tenant access' : 'Platform access'}</p>
+          <h1 id="login-title">
+            {loginContext?.mode === 'tenant' ? `Sign in to ${loginContext.tenant.display_name}` : 'Sign in to Lattice'}
+          </h1>
+          <p>
+            {loginContext?.mode === 'tenant'
+              ? 'Use an authorized tenant account for this workspace.'
+              : 'Use an authorized platform owner account to continue.'}
+          </p>
         </div>
         {notice ? <div className="login-notice">{notice}</div> : null}
         <form className="login-form" onSubmit={submit}>
@@ -75,9 +100,20 @@ export function LoginPage({ notice, onAuthenticated }: { notice?: string; onAuth
               {error}
             </div>
           ) : null}
-          <Button disabled={loading} icon={<LogIn size={16} />} type="submit">
-            {loading ? 'Signing in' : 'Sign in'}
-          </Button>
+          <div className="login-options">
+            <label className="login-remember">
+              <input type="checkbox" name="remember" />
+              <span>Remember me</span>
+            </label>
+            <a className="login-forgot" href="#password-reset">
+              Forgot password?
+            </a>
+          </div>
+          <div className="login-actions">
+            <Button disabled={loading} icon={<LogIn size={16} />} type="submit">
+              {loading ? 'Signing in' : 'Sign in'}
+            </Button>
+          </div>
         </form>
         <p className="login-meta">Session cookies are handled by the backend. No access tokens are stored in the browser.</p>
       </section>
@@ -88,6 +124,11 @@ export function LoginPage({ notice, onAuthenticated }: { notice?: string; onAuth
 export function LoginScreenShell({ children }: { children: ReactNode }) {
   return (
     <main className="login-shell">
+      <section className="login-visual" aria-hidden="true">
+        <div className="login-visual__mark">
+          <BrandLogo compact />
+        </div>
+      </section>
       <div className="login-shell__surface">{children}</div>
     </main>
   );

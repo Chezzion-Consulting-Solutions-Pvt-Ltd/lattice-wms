@@ -3,10 +3,28 @@ import './components.css';
 
 type SurfaceVariant = 'solid' | 'glass';
 
-export function Card({ title, children, variant = 'solid' }: { title: string; children: ReactNode; variant?: SurfaceVariant }) {
+export function Card({
+  title,
+  description,
+  actions,
+  children,
+  variant = 'solid',
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  variant?: SurfaceVariant;
+}) {
   return (
     <section className={`lattice-card lattice-card--${variant}`}>
-      <h2>{title}</h2>
+      <div className="lattice-card__header">
+        <div>
+          <h2>{title}</h2>
+          {description ? <p>{description}</p> : null}
+        </div>
+        {actions ? <div className="lattice-card__actions">{actions}</div> : null}
+      </div>
       {children}
     </section>
   );
