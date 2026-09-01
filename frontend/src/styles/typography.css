@@ -1,0 +1,43 @@
+:root {
+  --lattice-text-display: 40px;
+  --lattice-text-h1: 32px;
+  --lattice-text-h2: 24px;
+  --lattice-text-h3: 20px;
+  --lattice-text-h4: 18px;
+  --lattice-text-page-title: 24px;
+  --lattice-text-section-title: 18px;
+  --lattice-text-card-title: 16px;
+  --lattice-text-body: 14px;
+  --lattice-text-body-small: 13px;
+  --lattice-text-label: 12px;
+  --lattice-text-caption: 12px;
+  --lattice-text-table-header: 12px;
+  --lattice-text-table-body: 13px;
+  --lattice-weight-regular: 400;
+  --lattice-weight-medium: 500;
+  --lattice-weight-semibold: 600;
+  --lattice-weight-bold: 700;
+}
+
+.lattice-display {
+  font-size: var(--lattice-text-display);
+  font-weight: var(--lattice-weight-bold);
+  line-height: 1.05;
+}
+
+.lattice-page-title {
+  font-size: var(--lattice-text-page-title);
+  font-weight: var(--lattice-weight-semibold);
+  line-height: 1.2;
+}
+
+.lattice-body {
+  font-size: var(--lattice-text-body);
+  line-height: 1.5;
+}
+
+.lattice-caption {
+  color: var(--lattice-text-muted);
+  font-size: var(--lattice-text-caption);
+  line-height: 1.4;
+}

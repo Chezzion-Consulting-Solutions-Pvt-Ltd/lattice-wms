@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+@import './tokens.css';
+@import './typography.css';
+
+@theme inline {
+  --color-lattice-primary: var(--lattice-primary);
+  --color-lattice-primary-hover: var(--lattice-primary-hover);
+  --color-lattice-background: var(--lattice-background);
+  --color-lattice-surface: var(--lattice-surface);
+  --color-lattice-surface-secondary: var(--lattice-surface-secondary);
+  --color-lattice-text-primary: var(--lattice-text-primary);
+  --color-lattice-text-secondary: var(--lattice-text-secondary);
+  --color-lattice-text-muted: var(--lattice-text-muted);
+  --color-lattice-text-inverse: var(--lattice-text-inverse);
+  --color-lattice-border: var(--lattice-border);
+  --color-lattice-success: var(--lattice-success);
+  --color-lattice-warning: var(--lattice-warning);
+  --color-lattice-danger: var(--lattice-danger);
+  --color-lattice-info: var(--lattice-info);
+  --radius-lattice-sm: var(--lattice-radius-sm);
+  --radius-lattice-md: var(--lattice-radius-md);
+  --radius-lattice-lg: var(--lattice-radius-lg);
+  --shadow-lattice-sm: var(--lattice-shadow-sm);
+  --shadow-lattice-md: var(--lattice-shadow-md);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color: var(--lattice-text-primary);
+  background: var(--lattice-background);
+  font-family: var(--lattice-font-family);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--lattice-info);
+  outline-offset: 2px;
+}
