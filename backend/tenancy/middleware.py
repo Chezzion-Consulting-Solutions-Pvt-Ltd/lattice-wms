@@ -50,6 +50,11 @@ class TenantResolutionMiddleware:
         user = getattr(request, "user", None)
         if user is None or not getattr(user, "is_authenticated", False):
             return
+        jwt_session = getattr(request, "lattice_security_session", None)
+        if jwt_session is not None:
+            if jwt_session.tenant_id != tenant.id:
+                raise TenantResolutionError("Tenant session is not authorized for this tenant.")
+            return
         session_key = request.session.session_key
         if not session_key:
             raise TenantResolutionError("Tenant session is required.")

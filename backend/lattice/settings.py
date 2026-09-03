@@ -40,6 +40,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "identity.middleware.JwtAuthenticationMiddleware",
     "lattice.middleware.SecuritySessionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -111,6 +112,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "identity.jwt.LatticeJWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
@@ -137,6 +139,13 @@ LOGIN_USER_LOCKOUT_SECONDS = int(os.environ.get("LOGIN_USER_LOCKOUT_SECONDS", "9
 LOGIN_IP_FAILURE_LIMIT = int(os.environ.get("LOGIN_IP_FAILURE_LIMIT", "20"))
 LOGIN_FAILURE_WINDOW_SECONDS = int(os.environ.get("LOGIN_FAILURE_WINDOW_SECONDS", "300"))
 MFA_SECRET_ENCRYPTION_KEY = os.environ.get("MFA_SECRET_ENCRYPTION_KEY", SECRET_KEY)
+JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY", SECRET_KEY)
+JWT_ISSUER = os.environ.get("JWT_ISSUER", "lattice")
+JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "lattice-api")
+JWT_ACCESS_TOKEN_SECONDS = int(os.environ.get("JWT_ACCESS_TOKEN_SECONDS", "900"))
+JWT_REFRESH_TOKEN_SECONDS = int(os.environ.get("JWT_REFRESH_TOKEN_SECONDS", "604800"))
+JWT_COOKIE_SECURE = os.environ.get("JWT_COOKIE_SECURE", str(not DEBUG)).lower() == "true"
+JWT_COOKIE_SAMESITE = os.environ.get("JWT_COOKIE_SAMESITE", "Lax")
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"

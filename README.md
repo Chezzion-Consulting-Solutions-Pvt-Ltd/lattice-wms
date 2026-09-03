@@ -36,6 +36,27 @@ Frontend: `http://localhost:5173`
 
 Backend health: `http://localhost:8000/health/live`
 
+pgAdmin: `http://localhost:5050`
+
+Local pgAdmin login:
+
+- Email: `admin@lattice.example.com`
+- Password: `local-pgadmin-password`
+
+Register a pgAdmin server using:
+
+- Host: `postgres`
+- Port: `5432`
+- Maintenance database: `lattice_control`
+- Admin username: `postgres`
+- Admin password: `local-admin-password`
+
+Runtime app credentials are also available for least-privilege checks:
+
+- Control DB: `lattice_control_app` / `local-control-password`
+- Tenant Alpha DB: `lattice_alpha_app` / `local-alpha-password`
+- Tenant Beta DB: `lattice_beta_app` / `local-beta-password`
+
 ## Tenant Provisioning Dry Run
 
 ```bash

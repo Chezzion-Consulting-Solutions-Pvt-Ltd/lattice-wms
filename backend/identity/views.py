@@ -22,12 +22,22 @@ from rest_framework.views import APIView
 from audit.models import AuditEvent
 from control.models import Tenant, TenantDomain, TenantMembership
 from identity.audit import record_security_event
+from identity.jwt import (
+    REFRESH_COOKIE_NAME,
+    JwtAuthenticationError,
+    authenticate_token,
+    build_token_pair,
+    clear_token_cookies,
+    issue_token_pair,
+    set_token_cookies,
+)
 from identity.models import MfaDevice, PasswordResetToken, RecoveryCode, SecuritySession
 from tenancy.exceptions import TenantResolutionError
 from tenancy.resolver import normalize_hostname
 
 
 class LoginView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_scope = "login"
 
@@ -92,6 +102,7 @@ class LoginView(APIView):
         login(request, user)
         _bind_session_tenant(request, tenant)
         _track_session(request, user, tenant=tenant)
+        tokens = issue_token_pair(request, user, tenant=tenant)
         _clear_login_failures(request, user)
         record_security_event(
             request,
@@ -100,7 +111,9 @@ class LoginView(APIView):
             user_id=user.id,
             tenant_id=getattr(tenant, "id", None),
         )
-        return Response(_serialize_user(user))
+        response = Response({**_serialize_user(user), **tokens})
+        set_token_cookies(response, tokens)
+        return response
 
 
 class LoginContextView(APIView):
@@ -129,16 +142,41 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        jwt_session = getattr(request, "lattice_security_session", None)
+        if jwt_session is not None:
+            jwt_session.revoked_at = timezone.now()
+            jwt_session.revoke_reason = "logout"
+            jwt_session.save(update_fields=["revoked_at", "revoke_reason", "updated_at"])
         session_key = request.session.session_key
         if session_key:
             SecuritySession.objects.filter(session_key_hash=SecuritySession.hash_session_key(session_key)).update(
                 revoked_at=timezone.now(),
                 revoke_reason="logout",
             )
-        tenant_id = request.session.get("tenant_id")
+        tenant_id = getattr(jwt_session, "tenant_id", None) or request.session.get("tenant_id")
         record_security_event(request, action="TENANT_LOGOUT" if tenant_id else "LOGOUT", result=AuditEvent.Result.SUCCESS, user_id=request.user.id, tenant_id=tenant_id)
         logout(request)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        clear_token_cookies(response)
+        return response
+
+
+class TokenRefreshView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = "standard_api"
+
+    def post(self, request):
+        refresh_token = str(request.data.get("refresh_token", "")) or request.COOKIES.get(REFRESH_COOKIE_NAME, "")
+        if not refresh_token:
+            return Response({"error": {"code": "REFRESH_TOKEN_REQUIRED", "message": "Refresh token required."}}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            principal = authenticate_token(refresh_token, token_type="refresh", source="refresh")
+        except JwtAuthenticationError as exc:
+            return Response({"error": {"code": exc.code, "message": exc.message}}, status=status.HTTP_401_UNAUTHORIZED)
+        tokens = build_token_pair(principal.user, refresh_jti=str(principal.payload["jti"]), tenant=principal.session.tenant)
+        response = Response(tokens)
+        set_token_cookies(response, tokens)
+        return response
 
 
 class MeView(APIView):
@@ -238,7 +276,7 @@ class RevokeOtherSessionsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        current_hash = SecuritySession.hash_session_key(request.session.session_key or "")
+        current_hash = _current_security_session_hash(request)
         request.user.security_sessions.exclude(session_key_hash=current_hash).filter(revoked_at__isnull=True).update(
             revoked_at=timezone.now(),
             revoke_reason="user_revoked_others",
@@ -298,10 +336,17 @@ class MfaVerifyView(APIView):
             login(request, user)
             _bind_session_tenant(request, tenant)
             _track_session(request, user, tenant=tenant)
+            tokens = issue_token_pair(request, user, tenant=tenant)
             request.session.pop("pending_mfa_user_id", None)
             request.session.pop("pending_mfa_tenant_id", None)
         record_security_event(request, action="MFA_VERIFIED", result=AuditEvent.Result.SUCCESS, user_id=user.id, tenant_id=request.session.get("tenant_id"))
-        return Response(_serialize_user(user))
+        response_payload = _serialize_user(user)
+        if "tokens" in locals():
+            response_payload.update(tokens)
+        response = Response(response_payload)
+        if "tokens" in locals():
+            set_token_cookies(response, tokens)
+        return response
 
 
 class MfaDisableView(APIView):
@@ -354,6 +399,13 @@ def _track_session(request, user, *, tenant: Tenant | None = None) -> None:
             "user_agent": request.META.get("HTTP_USER_AGENT", "")[:1000],
         },
     )
+
+
+def _current_security_session_hash(request) -> str:
+    jwt_session = getattr(request, "lattice_security_session", None)
+    if jwt_session is not None:
+        return jwt_session.session_key_hash
+    return SecuritySession.hash_session_key(request.session.session_key or "")
 
 
 def _privileged_requires_mfa(user, *, tenant: Tenant | None = None) -> bool:

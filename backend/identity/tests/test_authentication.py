@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from audit.models import AuditEvent
 from control.models import Tenant, TenantDatabase, TenantDomain, TenantMembership, TenantModule
+from identity.jwt import ACCESS_COOKIE_NAME
 from identity.models import MembershipRole, MfaDevice, PasswordResetToken, RecoveryCode, Role, SecuritySession, WarehouseAssignment
 from identity.views import _protect_secret, _unprotect_secret
 
@@ -73,8 +74,67 @@ def test_valid_login_creates_session_and_audit_event(db):
 
     assert response.status_code == 200
     assert response.json()["email"] == user.email
+    assert response.json()["token_type"] == "Bearer"
+    assert response.json()["access_token"].count(".") == 2
+    assert response.json()["refresh_token"].count(".") == 2
     assert SecuritySession.objects.filter(user=user, revoked_at__isnull=True).exists()
     assert AuditEvent.objects.filter(action="LOGIN_SUCCESS", global_user_id=user.id).exists()
+
+
+def test_jwt_bearer_token_authenticates_api_without_session_cookie(db):
+    user = get_user_model().objects.create_user(email="jwt-owner@example.test", password="StrongerPass123!")
+    login_response = api_login(Client(), user.email, "StrongerPass123!")
+    token = login_response.json()["access_token"]
+
+    response = Client().get("/api/v1/auth/me/", HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert response.status_code == 200
+    assert response.json()["email"] == user.email
+
+
+def test_refresh_token_issues_new_access_token(db):
+    user = get_user_model().objects.create_user(email="refresh@example.test", password="StrongerPass123!")
+    login_response = api_login(Client(), user.email, "StrongerPass123!")
+    refresh_token = login_response.json()["refresh_token"]
+
+    response = Client().post(
+        "/api/v1/auth/token/refresh/",
+        {"refresh_token": refresh_token},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["token_type"] == "Bearer"
+    assert response.json()["access_token"].count(".") == 2
+
+
+def test_revoked_jwt_session_cannot_access_api(db):
+    user = get_user_model().objects.create_user(email="revoked-jwt@example.test", password="StrongerPass123!")
+    login_response = api_login(Client(), user.email, "StrongerPass123!")
+    token = login_response.json()["access_token"]
+    SecuritySession.objects.filter(user=user).update(revoked_at=timezone.now(), revoke_reason="test")
+
+    response = Client().get("/api/v1/auth/me/", HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "SESSION_REVOKED"
+
+
+def test_cookie_jwt_does_not_authorize_state_changing_api_without_session(db):
+    user = get_user_model().objects.create_user(email="cookie-jwt@example.test", password="StrongerPass123!")
+    login_response = api_login(Client(), user.email, "StrongerPass123!")
+    token = login_response.json()["access_token"]
+    session = SecuritySession.objects.get(user=user)
+    cookie_only = Client()
+    cookie_only.cookies[ACCESS_COOKIE_NAME] = token
+
+    denied = cookie_only.post("/api/v1/auth/sessions/revoke-others/")
+    allowed = Client().post("/api/v1/auth/sessions/revoke-others/", HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert denied.status_code in {401, 403}
+    assert allowed.status_code == 204
+    session.refresh_from_db()
+    assert session.revoked_at is None
 
 
 @override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "gamma.localhost", "testserver"])
@@ -91,6 +151,20 @@ def test_valid_alpha_user_login_on_alpha_domain_binds_tenant_session(db):
     assert session.tenant == alpha
     assert client.session["tenant_code"] == "alpha"
     assert AuditEvent.objects.filter(action="TENANT_LOGIN_SUCCESS", global_user_id=user.id, tenant_id=alpha.id).exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "testserver"])
+def test_tenant_login_with_existing_session_cookie_does_not_require_csrf(db):
+    alpha = create_login_tenant("alpha")
+    user = get_user_model().objects.create_user(email="alpha.admin@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=alpha, status=TenantMembership.Status.ACTIVE)
+    client = Client(enforce_csrf_checks=True)
+
+    assert tenant_login(client, "alpha.localhost", user.email, "StrongerPass123!").status_code == 200
+    response = tenant_login(client, "alpha.localhost", user.email, "StrongerPass123!")
+
+    assert response.status_code == 200
+    assert response.json()["email"] == user.email
 
 
 @override_settings(ALLOWED_HOSTS=["alpha.localhost", "testserver"])
@@ -225,6 +299,26 @@ def test_tenant_session_bound_to_alpha_cannot_access_beta_tenant_api(db):
     assert tenant_login(client, "alpha.localhost", user.email, "StrongerPass123!").status_code == 200
 
     response = client.get("/api/v1/tenant/probe/", HTTP_HOST="beta.localhost")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TenantResolutionError"
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "testserver"])
+def test_tenant_jwt_bound_to_alpha_cannot_access_beta_tenant_api(db):
+    alpha = create_login_tenant("alpha")
+    beta = create_login_tenant("beta")
+    user = get_user_model().objects.create_user(email="jwt-multi@example.test", password="StrongerPass123!")
+    TenantMembership.objects.create(user=user, tenant=alpha, status=TenantMembership.Status.ACTIVE)
+    TenantMembership.objects.create(user=user, tenant=beta, status=TenantMembership.Status.ACTIVE)
+    login_response = tenant_login(Client(), "alpha.localhost", user.email, "StrongerPass123!")
+    token = login_response.json()["access_token"]
+
+    response = Client().get(
+        "/api/v1/tenant/probe/",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+        HTTP_HOST="beta.localhost",
+    )
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "TenantResolutionError"

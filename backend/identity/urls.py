@@ -14,11 +14,13 @@ from identity.views import (
     RevokeOtherSessionsView,
     RevokeSessionView,
     SessionListView,
+    TokenRefreshView,
 )
 
 urlpatterns = [
     path("login/context/", LoginContextView.as_view(), name="login-context"),
     path("login/", LoginView.as_view(), name="login"),
+    path("token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("password/reset/request/", PasswordResetRequestView.as_view(), name="password-reset-request"),
     path("password/reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),

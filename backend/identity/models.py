@@ -83,6 +83,7 @@ class PlatformTenantAccessGrant(TimeStampedModel):
 class SecuritySession(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     session_key_hash = models.CharField(max_length=128, unique=True)
+    jwt_token_hash = models.CharField(max_length=128, unique=True, null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="security_sessions")
     tenant = models.ForeignKey("control.Tenant", on_delete=models.CASCADE, related_name="security_sessions", null=True, blank=True)
     last_seen_at = models.DateTimeField(auto_now=True)

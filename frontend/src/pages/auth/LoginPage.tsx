@@ -1,10 +1,11 @@
 import { LogIn } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
-import { apiFetch, LatticeApiError } from '../../api/client';
+import { apiFetch, LatticeApiError, setAccessToken } from '../../api/client';
 import { Badge, BrandLogo, Button, FormField, Input, LoadingState, PasswordInput } from '../../design-system';
 import type { CurrentUser, LoginContext } from '../../types';
 
 type ApiErrorPayload = {
+  access_token?: string;
   error?: {
     code?: string;
     message?: string;
@@ -18,6 +19,7 @@ export function LoginPage({ notice, onAuthenticated }: { notice?: string; onAuth
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [loginContext, setLoginContext] = useState<LoginContext | null>(null);
+  const visibleNotice = loginContext?.mode === 'tenant' && notice?.includes('Owner Console') ? '' : notice;
 
   useEffect(() => {
     let mounted = true;
@@ -74,7 +76,7 @@ export function LoginPage({ notice, onAuthenticated }: { notice?: string; onAuth
               : 'Use an authorized platform owner account to continue.'}
           </p>
         </div>
-        {notice ? <div className="login-notice">{notice}</div> : null}
+        {visibleNotice ? <div className="login-notice">{visibleNotice}</div> : null}
         <form className="login-form" onSubmit={submit}>
           <FormField label="Email">
             <Input
@@ -115,7 +117,7 @@ export function LoginPage({ notice, onAuthenticated }: { notice?: string; onAuth
             </Button>
           </div>
         </form>
-        <p className="login-meta">Session cookies are handled by the backend. No access tokens are stored in the browser.</p>
+        <p className="login-meta">Access tokens are kept in memory. No sensitive tokens are stored in browser storage.</p>
       </section>
     </LoginScreenShell>
   );
@@ -161,6 +163,9 @@ async function loginRequest(email: string, password: string) {
       ...(error.request_id ? { request_id: error.request_id } : {}),
     };
     throw new LatticeApiError(apiError);
+  }
+  if (payload.access_token) {
+    setAccessToken(payload.access_token);
   }
   return payload as CurrentUser;
 }

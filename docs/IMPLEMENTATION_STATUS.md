@@ -22,7 +22,8 @@
 - Added the Lattice Owner Console dashboard UI as the active frontend surface.
 - Refined the Owner Dashboard into page 1 of the page-by-page Owner Console delivery: concise platform-health overview only, backed by the real control-plane dashboard API with no frontend mock/fallback tenant data.
 - Added a login-first frontend entry so anonymous visitors see the Lattice sign-in screen before any Owner Console shell or protected dashboard request is rendered.
-- Wired frontend logout through the backend session endpoint and kept authentication cookie-based with no browser token storage.
+- Wired frontend logout through the backend session endpoint and kept authentication token handling out of browser localStorage.
+- Added JWT access/refresh authentication for login and MFA completion, with Bearer-token API support, HttpOnly token cookies, refresh endpoint, and token families bound to the tracked `SecuritySession` registry.
 - Added Owner Console tenant management actions for control-plane create, inspect, edit, activate, and suspend flows with responsive Tenants-page UI controls.
 - Added owner navigation for Dashboard, Tenants, Subscriptions, Modules, Users & Access, Infrastructure, Security, Reports, and Settings.
 - Added a control-plane owner dashboard API under `/api/v1/control/owner/dashboard/`.
@@ -78,6 +79,8 @@
 - Docker health after rebuild: backend, frontend, Celery, PostgreSQL, and Redis healthy.
 - Product Category schema location check: `warehouse_productcategory` is absent from the control database and present in Tenant Alpha/Beta databases.
 - Product Category targeted DB-backed suite: `warehouse/tests/test_hierarchy_api.py` passed with 8 passed, 0 failed.
+- JWT authentication targeted suite: `identity/tests/test_authentication.py` passed with 33 passed, 0 failed.
+- Full Docker backend suite after tenant-login/JWT fixes with `LATTICE_RUN_DB_ISOLATION=1`: 77 passed, 0 failed, 0 skipped.
 
 ### Security Decisions
 
@@ -91,6 +94,8 @@
 - Platform support tenant-data access requires explicit expiring grants and is not implied by staff status.
 - Password-reset tokens, passwords, MFA secrets, recovery codes, and tenant database credentials are not written to audit summaries or application logs by the implemented flows.
 - Session revocation is enforced with real API requests through the authoritative `SecuritySession` registry.
+- JWT authentication reuses the same `SecuritySession` row as the browser session, so logout, password reset, expiry, and session revocation apply consistently to cookie and Bearer-token access.
+- Tenant login is evaluated independently from platform owner-console authorization; tenant users must have active membership in the resolved tenant, while owner APIs still deny tenant-only accounts.
 
 ### Known Limitations
 

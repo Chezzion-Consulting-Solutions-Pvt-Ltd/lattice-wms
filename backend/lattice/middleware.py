@@ -37,6 +37,9 @@ class SecuritySessionMiddleware:
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         if self._requires_enforcement(request):
+            jwt_session = getattr(request, "lattice_security_session", None)
+            if jwt_session is not None:
+                return self.get_response(request)
             session_key = request.session.session_key
             if not session_key:
                 logout(request)

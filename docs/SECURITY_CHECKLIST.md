@@ -7,7 +7,8 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Architecture | Database per tenant | VERIFIED | Docker-backed Alpha/Beta tenant isolation tests pass |
 | Architecture | Control DB contains no WMS transactions | IMPLEMENTED | App ownership rules |
 | Authentication | Local auth | VERIFIED | Login/logout/me/session APIs plus Docker-backed tests |
-| Authentication | Login-first frontend entry | VERIFIED | Anonymous UI renders sign-in before protected console data requests; session remains cookie-backed |
+| Authentication | Login-first frontend entry | VERIFIED | Anonymous UI renders sign-in before protected console data requests; JWT access tokens are kept in memory and not localStorage |
+| Authentication | JWT login | VERIFIED | Login/MFA issue JWT access and refresh tokens; refresh, Bearer-auth, stale-session login, and revocation tests pass |
 | Authentication | Tenant-domain login | VERIFIED | Domain-aware login context, active membership validation, tenant-bound sessions, and cross-tenant denial tests |
 | Authentication | Password reset | VERIFIED | Generic request, one-time token, expiry, session revocation tests |
 | Authentication | Login abuse protection | VERIFIED | Per-IP throttle, per-user lockout, recovery, success-clear tests |
@@ -19,7 +20,7 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Tenant Administration | Hierarchy CRUD | VERIFIED | Tenant DB-backed plant, warehouse, zone, storage type, section, bin API tests pass |
 | Tenant Master Data | Product Category CRUD | VERIFIED | Tenant DB-backed Product Category API tests pass; table exists in tenant DBs and not in control DB |
 | Tenant Administration | Active warehouse context | VERIFIED | Backend verifies active membership, active warehouse, and active assignment before session context change |
-| Session Management | Secure cookie strategy | VERIFIED | Cookie sessions, tracked security-session model, revoked/expired enforcement tests |
+| Session Management | Secure cookie/JWT strategy | VERIFIED | HttpOnly JWT cookies, tracked security-session model, Bearer auth, refresh, revoked/expired enforcement tests |
 | API Security | Versioned APIs | PARTIAL | `/api/v1/auth/login/`, `/api/v1/auth/login/context/`, `/api/v1/tenant/context/`, `/api/v1/tenant/probe/` |
 | Application Security | Safe errors | PARTIAL | Exception classes and middleware |
 | Tenant Isolation | Header/query DB selector ignored | VERIFIED | Resolver and DB-backed acceptance tests pass |
@@ -39,6 +40,6 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Cloud/Network Security | Private DB/Redis design | VERIFIED | Compose publishes only backend/frontend ports; Postgres/Redis remain internal |
 | Data Residency | Region metadata | PARTIAL | Tenant model region |
 | Incident Response | Runbook | PARTIAL | Initial document |
-| Penetration Testing | Security test suite | VERIFIED | Docker-backed mandatory security suite: 69 passed, 0 failed, 0 skipped |
+| Penetration Testing | Security test suite | VERIFIED | Docker-backed mandatory security suite with DB isolation enabled: 77 passed, 0 failed, 0 skipped |
 | Vendor Risk | Vendor security evidence request | IMPLEMENTED | `docs/VENDOR_SECURITY_EVIDENCE_REQUEST.md` covers checklist, SOC 2 Type II, privacy, ISO, VA/PT, LLM security, mobile PT, DR drill, and backup restore evidence |
 | Security Assessment | Current security measures assessment | IMPLEMENTED | `docs/SECURITY_MEASURES_ASSESSMENT.md` separates verified app controls from external evidence gaps |

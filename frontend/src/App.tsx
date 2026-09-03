@@ -1,21 +1,42 @@
 import { useEffect, useState } from 'react';
-import { apiFetch } from './api/client';
+import { apiFetch, clearAccessToken } from './api/client';
 import './app.css';
 import { LoginCheckingPage, LoginPage } from './pages/auth/LoginPage';
 import { OwnerConsole } from './pages/owner/OwnerConsole';
 import { TenantPortal } from './pages/tenant/TenantPortal';
-import type { CurrentUser } from './types';
+import type { CurrentUser, LoginContext } from './types';
+
+type PortalMode = 'owner' | 'tenant';
 
 export function App() {
-  const [requestedPortal] = useState(getRequestedPortal);
+  const [requestedPortal, setRequestedPortal] = useState<PortalMode>(getRequestedPortal);
   const [authState, setAuthState] = useState<'checking' | 'anonymous' | 'authenticated'>('checking');
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loginNotice, setLoginNotice] = useState('');
 
   useEffect(() => {
-    apiFetch<CurrentUser>('/api/v1/auth/me/')
-      .then((currentUser) => {
-        if (requestedPortal === 'tenant' || canOpenOwnerConsole(currentUser)) {
+    let mounted = true;
+
+    async function checkAuthentication() {
+      let portalMode = getRequestedPortal();
+      try {
+        const context = await apiFetch<LoginContext>('/api/v1/auth/login/context/');
+        portalMode = context.mode === 'tenant' ? 'tenant' : 'owner';
+      } catch {
+        portalMode = getRequestedPortal();
+      }
+
+      if (!mounted) {
+        return;
+      }
+      setRequestedPortal(portalMode);
+
+      try {
+        const currentUser = await apiFetch<CurrentUser>('/api/v1/auth/me/');
+        if (!mounted) {
+          return;
+        }
+        if (portalMode === 'tenant' || canOpenOwnerConsole(currentUser)) {
           setLoginNotice('');
           setUser(currentUser);
           setAuthState('authenticated');
@@ -24,13 +45,22 @@ export function App() {
         setLoginNotice('Sign in with an authorized platform owner account to continue.');
         setUser(null);
         setAuthState('anonymous');
-      })
-      .catch(() => {
+      } catch {
+        if (!mounted) {
+          return;
+        }
         setLoginNotice('');
         setUser(null);
         setAuthState('anonymous');
-      });
-  }, [requestedPortal]);
+      }
+    }
+
+    checkAuthentication();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleAuthenticated = (currentUser: CurrentUser) => {
     if (requestedPortal === 'owner' && !canOpenOwnerConsole(currentUser)) {
@@ -48,6 +78,7 @@ export function App() {
     try {
       await apiFetch('/api/v1/auth/logout/', { method: 'POST' });
     } finally {
+      clearAccessToken();
       setUser(null);
       setAuthState('anonymous');
     }
@@ -72,6 +103,13 @@ function canOpenOwnerConsole(user: CurrentUser) {
   return user.is_staff || user.is_platform_admin;
 }
 
-function getRequestedPortal() {
-  return window.location.pathname.startsWith('/tenant') ? 'tenant' : 'owner';
+function getRequestedPortal(): PortalMode {
+  const hostname = window.location.hostname.toLowerCase();
+  if (window.location.pathname.startsWith('/tenant')) {
+    return 'tenant';
+  }
+  if (window.location.pathname.startsWith('/owner')) {
+    return 'owner';
+  }
+  return hostname === 'localhost' || hostname === '127.0.0.1' ? 'owner' : 'tenant';
 }

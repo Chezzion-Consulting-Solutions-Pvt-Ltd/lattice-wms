@@ -43,6 +43,7 @@ Completed in the tenant/client authentication foundation:
 - Tenant-domain login with active tenant and active membership enforcement.
 - Cross-tenant login denial with safe audit events.
 - Tenant-bound `SecuritySession` records and tenant API session binding checks.
+- JWT access/refresh login with Bearer-token API support, refresh endpoint, HttpOnly token cookies, and tenant-bound token session enforcement.
 - Tenant context API returning safe tenant, module, role, permission, warehouse assignment, MFA, and configuration count data.
 
 Still in progress for tenant/client authentication:
