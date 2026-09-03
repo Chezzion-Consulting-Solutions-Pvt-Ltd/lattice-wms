@@ -7,27 +7,30 @@ The Owner Console is delivered page-by-page. A page is complete only when the UI
 | Page | Status | Notes |
 | --- | --- | --- |
 | Dashboard | FUNCTIONAL | Uses real control-plane API data and explicit API error states |
-| Tenant List | NOT IMPLEMENTED | Next page |
-| Create Tenant | NOT IMPLEMENTED | Must provision end-to-end before completion |
-| Tenant Detail | NOT IMPLEMENTED | Must use real tab APIs |
-| Plans | NOT IMPLEMENTED | Control-plane CRUD pending |
-| Subscriptions | NOT IMPLEMENTED | Control-plane CRUD pending |
-| Licenses | NOT IMPLEMENTED | Dedicated license lifecycle pending |
-| Platform Users | NOT IMPLEMENTED | Platform IAM CRUD pending |
-| Roles | NOT IMPLEMENTED | Role CRUD and permission assignment pending |
-| Permissions | NOT IMPLEMENTED | Authoritative permission-definition UI pending |
-| Support Access | NOT IMPLEMENTED | Request/approve/revoke workflow pending |
-| Modules | NOT IMPLEMENTED | Entitlement administration pending |
-| Feature Flags | NOT IMPLEMENTED | Global definitions and tenant overrides pending |
-| Tenant Databases | NOT IMPLEMENTED | Safe metadata and health actions pending |
-| Migrations | NOT IMPLEMENTED | Controlled migration jobs pending |
-| Backups | NOT IMPLEMENTED | Backup provider integration pending |
-| Restore | NOT IMPLEMENTED | Controlled restore workflow pending |
-| Service Health | NOT IMPLEMENTED | Dedicated service-health page pending |
-| Security Events | NOT IMPLEMENTED | Audit/security filters pending |
-| Audit Logs | NOT IMPLEMENTED | Append-only audit browsing pending |
-| Reports | NOT IMPLEMENTED | Control-plane reports pending |
-| Settings | NOT IMPLEMENTED | Persisted validated settings pending |
+| Tenant List | PARTIAL | API-backed existing table; advanced filters and dedicated page split pending |
+| Create Tenant | PARTIAL | Persists tenant and license records; full database provisioning workflow pending |
+| Tenant Detail | PARTIAL | API-backed metadata/database panel; tabbed detail APIs pending |
+| Plans | PARTIAL | Control-plane create/update/list API and route exist |
+| Subscriptions | PARTIAL | Control-plane upsert/update/list API and route exist |
+| Licenses | PARTIAL | Dedicated license records, list, renew, revoke, and reactivate APIs exist |
+| Platform Users | PARTIAL | Safe list/create/update API and route exist |
+| Roles | PARTIAL | Role create/update/list and permission assignment API exist |
+| Permissions | PARTIAL | Default owner permission registry API exists |
+| Support Access | PARTIAL | Owner-approved grant list/create/revoke API exists |
+| Modules | PARTIAL | Global module definitions and tenant override API exist |
+| Feature Flags | PARTIAL | Global definitions and tenant override API exist |
+| Tenant Databases | PARTIAL | Safe metadata list and health-check action exist |
+| Migrations | PARTIAL | Real status list exists; execution orchestration pending |
+| Backups | PARTIAL | Metadata and policy API exists; local provider truthfully reports `NOT_CONFIGURED` |
+| Restore | PARTIAL | Restore request persistence exists; provider execution pending |
+| Service Health | PARTIAL | Dedicated real health API exists |
+| Security Events | PARTIAL | Filterable denied/failed audit event API exists |
+| Audit Logs | PARTIAL | Append-only audit browsing API exists |
+| Sessions | PARTIAL | Platform session list and revoke API exist |
+| MFA Compliance | PARTIAL | Privileged user compliance API exists |
+| Reports | PARTIAL | Real control-plane report queries and CSV export exist |
+| Settings | PARTIAL | Persisted validated platform settings API exists |
+| Notifications | PARTIAL | Persisted notification list and read-state APIs exist |
 
 ## Dashboard
 
@@ -42,7 +45,7 @@ Implemented Dashboard data:
 - ready and healthy tenant database counts
 - database warning count
 - migration warning count from recorded tenant database migration metadata
-- backup status as `NOT_IMPLEMENTED` until a real backup provider exists
+- backup status as `NOT_CONFIGURED` until a real backup provider exists
 - security alert count from append-only audit events
 - active support access grant count
 - compact tenant health rows
@@ -52,3 +55,9 @@ Implemented Dashboard data:
 - subscription/license attention from control-plane records
 
 Dashboard access is server-authorized for active owner/staff users. Anonymous and non-owner users are denied.
+
+## Owner API Expansion
+
+The Owner API is split into focused modules under `/api/v1/control/owner/` for plans, subscriptions, licenses, modules, features, platform users, roles, permissions, support access, infrastructure, security events, audit logs, sessions, MFA compliance, reports, settings, and notifications.
+
+Current limitations remain explicit: tenant database provisioning, migration execution, and backup/restore provider execution are not faked. Local backup state is `NOT_CONFIGURED` unless a real provider is attached.

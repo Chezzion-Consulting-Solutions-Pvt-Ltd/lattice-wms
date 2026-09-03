@@ -95,13 +95,32 @@ type LicenseAttention = {
 type OwnerRoute =
   | 'dashboard'
   | 'tenants'
+  | 'tenants/new'
+  | 'plans'
   | 'subscriptions'
+  | 'licenses'
   | 'modules'
-  | 'users-access'
-  | 'infrastructure'
-  | 'security'
+  | 'features'
+  | 'users'
+  | 'roles'
+  | 'permissions'
+  | 'support-access'
+  | 'infrastructure/databases'
+  | 'infrastructure/migrations'
+  | 'infrastructure/backups'
+  | 'infrastructure/restore'
+  | 'infrastructure/health'
+  | 'security/events'
+  | 'security/audit'
+  | 'security/sessions'
+  | 'security/mfa'
   | 'reports'
   | 'settings'
+  | 'settings/security'
+  | 'settings/authentication'
+  | 'settings/provisioning'
+  | 'settings/notifications'
+  | 'settings/branding'
   | 'profile'
   | 'security-settings';
 
@@ -116,30 +135,100 @@ const ownerRouteMeta: Record<OwnerRoute, { title: string; description: string; h
     description: 'Tenant lifecycle, license, provisioning, database, and subscription status.',
     href: '/owner/tenants',
   },
+  'tenants/new': {
+    title: 'Create Tenant',
+    description: 'Provision new tenant control-plane records and database mappings.',
+    href: '/owner/tenants/new',
+  },
+  plans: {
+    title: 'Plans',
+    description: 'Commercial plan definitions, limits, modules, and support tiers.',
+    href: '/owner/plans',
+  },
   subscriptions: {
     title: 'Subscriptions',
-    description: 'Plan and license attention across the control plane.',
+    description: 'Tenant subscription state, renewal posture, and plan assignments.',
     href: '/owner/subscriptions',
+  },
+  licenses: {
+    title: 'Licenses',
+    description: 'Tenant license status, renewals, expiry, and revocation controls.',
+    href: '/owner/licenses',
   },
   modules: {
     title: 'Modules',
-    description: 'Platform module entitlements and feature availability.',
+    description: 'Global WMS module definitions and activation state.',
     href: '/owner/modules',
   },
-  'users-access': {
-    title: 'Users & Access',
-    description: 'Platform users, roles, permissions, MFA posture, and support access.',
-    href: '/owner/users-access',
+  features: {
+    title: 'Feature Flags',
+    description: 'Global feature flags and tenant override state.',
+    href: '/owner/features',
   },
-  infrastructure: {
-    title: 'Infrastructure',
-    description: 'Backend, PostgreSQL, Redis, Celery, tenant database, backup, and migration health.',
-    href: '/owner/infrastructure',
+  users: {
+    title: 'Platform Users',
+    description: 'Platform users, MFA posture, and session counts.',
+    href: '/owner/users',
   },
-  security: {
-    title: 'Security',
-    description: 'Security events, denied actions, support grants, and privileged access signals.',
-    href: '/owner/security',
+  roles: {
+    title: 'Roles',
+    description: 'Platform roles and assigned permission codes.',
+    href: '/owner/roles',
+  },
+  permissions: {
+    title: 'Permissions',
+    description: 'Grouped platform permission registry.',
+    href: '/owner/permissions',
+  },
+  'support-access': {
+    title: 'Support Access',
+    description: 'Time-bounded owner-approved tenant support access grants.',
+    href: '/owner/support-access',
+  },
+  'infrastructure/databases': {
+    title: 'Tenant Databases',
+    description: 'Safe tenant database metadata, health, migration, and provisioning state.',
+    href: '/owner/infrastructure/databases',
+  },
+  'infrastructure/migrations': {
+    title: 'Migrations',
+    description: 'Tenant migration status and attention items.',
+    href: '/owner/infrastructure/migrations',
+  },
+  'infrastructure/backups': {
+    title: 'Backups',
+    description: 'Backup policies and provider status without fake backup success.',
+    href: '/owner/infrastructure/backups',
+  },
+  'infrastructure/restore': {
+    title: 'Restore Requests',
+    description: 'Controlled restore requests and provider-dependent execution state.',
+    href: '/owner/infrastructure/restore',
+  },
+  'infrastructure/health': {
+    title: 'Service Health',
+    description: 'Backend, PostgreSQL, Redis, Celery, and tenant database health checks.',
+    href: '/owner/infrastructure/health',
+  },
+  'security/events': {
+    title: 'Security Events',
+    description: 'Denied and failed control-plane events with safe request details.',
+    href: '/owner/security/events',
+  },
+  'security/audit': {
+    title: 'Audit Logs',
+    description: 'Append-only owner audit history and mutation records.',
+    href: '/owner/security/audit',
+  },
+  'security/sessions': {
+    title: 'Sessions',
+    description: 'Platform security sessions and revocation state.',
+    href: '/owner/security/sessions',
+  },
+  'security/mfa': {
+    title: 'MFA Compliance',
+    description: 'Privileged platform user MFA compliance posture.',
+    href: '/owner/security/mfa',
   },
   reports: {
     title: 'Reports',
@@ -147,9 +236,34 @@ const ownerRouteMeta: Record<OwnerRoute, { title: string; description: string; h
     href: '/owner/reports',
   },
   settings: {
-    title: 'Settings',
-    description: 'Owner Console configuration and platform administration preferences.',
+    title: 'General Settings',
+    description: 'Platform display name, defaults, domain, and support metadata.',
     href: '/owner/settings',
+  },
+  'settings/security': {
+    title: 'Security Settings',
+    description: 'Persisted platform security policy values.',
+    href: '/owner/settings/security',
+  },
+  'settings/authentication': {
+    title: 'Authentication Settings',
+    description: 'Password, MFA, session, and future federation policy metadata.',
+    href: '/owner/settings/authentication',
+  },
+  'settings/provisioning': {
+    title: 'Provisioning Settings',
+    description: 'Safe tenant provisioning defaults and migration policy metadata.',
+    href: '/owner/settings/provisioning',
+  },
+  'settings/notifications': {
+    title: 'Notification Settings',
+    description: 'Owner notification policy and unread operational alerts.',
+    href: '/owner/settings/notifications',
+  },
+  'settings/branding': {
+    title: 'Branding Settings',
+    description: 'Safe Lattice branding metadata without arbitrary CSS or JavaScript.',
+    href: '/owner/settings/branding',
   },
   profile: {
     title: 'Profile',
@@ -355,7 +469,7 @@ function OwnerDashboardPage({
         <StatCard variant="glass" tone="success" icon={<CheckCircle2 size={18} />} label="Active Tenants" value={data.summary.active_tenants} />
         <StatCard variant="glass" tone={tenantDbIssues ? 'warning' : 'success'} icon={<Database size={18} />} label="Tenant DB Health" value={`${data.summary.healthy_databases}/${data.summary.total_tenants}`} />
         <StatCard variant="glass" tone={data.summary.security_alerts ? 'danger' : 'success'} icon={<ShieldAlert size={18} />} label="Security Alerts" value={data.summary.security_alerts} />
-        <StatCard variant="glass" tone={backupIssues ? 'warning' : 'info'} icon={<HardDrive size={18} />} label="Backup Issues" value={backupIssues ?? 'N/I'} />
+        <StatCard variant="glass" tone={backupIssues ? 'warning' : 'info'} icon={<HardDrive size={18} />} label="Backup Issues" value={backupIssues ?? 0} />
         <StatCard variant="glass" tone={migrationIssues ? 'warning' : 'success'} icon={<Server size={18} />} label="Migration Issues" value={migrationIssues} />
       </section>
 
@@ -452,7 +566,7 @@ function OwnerSectionPage({
     );
   }
 
-  if (route === 'infrastructure') {
+  if (route === 'infrastructure/health') {
     const tenantDbIssues = Math.max(data.summary.total_tenants - data.summary.ready_databases, 0);
     return (
       <section className="owner-page-grid">
@@ -478,14 +592,14 @@ function OwnerSectionPage({
             <StatusLine label="Migration status" status={data.infrastructure.migration_status} />
             <StatusLine label="Migration warnings" status={String(data.summary.migration_warnings)} />
             <StatusLine label="Backup status" status={data.infrastructure.backup_status} />
-            <StatusLine label="Backup warnings" status={data.summary.backup_warnings === null ? 'NOT IMPLEMENTED' : String(data.summary.backup_warnings)} />
+            <StatusLine label="Backup warnings" status={String(data.summary.backup_warnings ?? 0)} />
           </div>
         </Card>
       </section>
     );
   }
 
-  if (route === 'security') {
+  if (route === 'security/events') {
     return (
       <section className="owner-page-grid">
         <Card title="Security Events" variant="glass">
@@ -531,23 +645,132 @@ function OwnerSectionPage({
     );
   }
 
+  if (route === 'tenants/new') {
+    return (
+      <section className="owner-page-grid">
+        <Card title="Tenant Provisioning" variant="glass">
+          <CreateTenantDialog onCreated={onTenantMutated} />
+          <p className="owner-page-note">Tenant creation persists control-plane metadata today. Dedicated database provisioning remains a controlled backend workflow and is never selected from browser-supplied database names.</p>
+        </Card>
+      </section>
+    );
+  }
+
+  return <OwnerApiResourcePage route={route} />;
+}
+
+const ownerApiResources: Partial<Record<OwnerRoute, { endpoint: string; collection: string; title: string }>> = {
+  plans: { endpoint: '/api/v1/control/owner/plans/', collection: 'plans', title: 'Plans' },
+  licenses: { endpoint: '/api/v1/control/owner/licenses/', collection: 'licenses', title: 'Licenses' },
+  modules: { endpoint: '/api/v1/control/owner/modules/', collection: 'modules', title: 'Modules' },
+  features: { endpoint: '/api/v1/control/owner/features/', collection: 'features', title: 'Feature Flags' },
+  users: { endpoint: '/api/v1/control/owner/users/', collection: 'users', title: 'Platform Users' },
+  roles: { endpoint: '/api/v1/control/owner/roles/', collection: 'roles', title: 'Roles' },
+  permissions: { endpoint: '/api/v1/control/owner/permissions/', collection: 'permissions', title: 'Permissions' },
+  'support-access': { endpoint: '/api/v1/control/owner/support-access/', collection: 'support_access', title: 'Support Access' },
+  'infrastructure/databases': { endpoint: '/api/v1/control/owner/infrastructure/databases/', collection: 'databases', title: 'Tenant Databases' },
+  'infrastructure/migrations': { endpoint: '/api/v1/control/owner/infrastructure/migrations/', collection: 'migrations', title: 'Migrations' },
+  'infrastructure/backups': { endpoint: '/api/v1/control/owner/infrastructure/backups/', collection: 'backups', title: 'Backups' },
+  'infrastructure/restore': { endpoint: '/api/v1/control/owner/infrastructure/restore/', collection: 'restore_requests', title: 'Restore Requests' },
+  'security/audit': { endpoint: '/api/v1/control/owner/security/audit/', collection: 'audit_logs', title: 'Audit Logs' },
+  'security/sessions': { endpoint: '/api/v1/control/owner/security/sessions/', collection: 'sessions', title: 'Sessions' },
+  'security/mfa': { endpoint: '/api/v1/control/owner/security/mfa/', collection: 'mfa_compliance', title: 'MFA Compliance' },
+  reports: { endpoint: '/api/v1/control/owner/reports/', collection: 'rows', title: 'Owner Reports' },
+  settings: { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'General Settings' },
+  'settings/security': { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'Security Settings' },
+  'settings/authentication': { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'Authentication Settings' },
+  'settings/provisioning': { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'Provisioning Settings' },
+  'settings/notifications': { endpoint: '/api/v1/control/owner/notifications/', collection: 'notifications', title: 'Notifications' },
+  'settings/branding': { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'Branding Settings' },
+};
+
+function OwnerApiResourcePage({ route }: { route: OwnerRoute }) {
+  const resource = ownerApiResources[route];
+  const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    if (!resource) {
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      setPayload(await apiFetch<Record<string, unknown>>(resource.endpoint));
+    } catch (caught) {
+      if (caught instanceof LatticeApiError) {
+        setError(caught.message);
+        return;
+      }
+      setError('Unable to load owner control-plane data.');
+    } finally {
+      setLoading(false);
+    }
+  }, [resource]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (!resource) {
+    return <ErrorState title="Owner page is not configured." />;
+  }
+
+  const records = Array.isArray(payload?.[resource.collection]) ? payload[resource.collection] as Array<Record<string, unknown>> : [];
+  const rows = records.map(toTableRow);
+  const columns = buildColumns(rows);
+
   return (
     <section className="owner-page-grid">
-      <Card title="Control-Plane Summary" variant="glass">
-        <div className="owner-status-stack">
-          <StatusLine label="Total tenants" status={String(data.summary.total_tenants)} />
-          <StatusLine label="Active users" status={String(data.summary.active_users)} />
-          <StatusLine label="Roles" status={String(data.summary.roles)} />
-          <StatusLine label="Permissions" status={String(data.summary.permissions)} />
+      <Card title={resource.title} variant="glass">
+        {loading ? <LoadingState title={`Loading ${resource.title.toLowerCase()}`} /> : null}
+        {error ? <ErrorState title={error} /> : null}
+        {!loading && !error ? (
+          <DataTable
+            searchable
+            pagination
+            columns={columns.length ? columns : [{ key: 'status', header: 'Status' }]}
+            rows={rows.length ? rows : [{ status: 'No records found.' }]}
+            emptyMessage="No records found."
+          />
+        ) : null}
+        <div className="owner-form-actions">
+          <Button variant="secondary" icon={<RefreshCw size={16} />} onClick={load}>
+            Retry
+          </Button>
         </div>
-      </Card>
-      <Card title="Implementation Status" variant="glass">
-        <p className="owner-page-note">
-          This page is reserved for dedicated Owner Console administration. It uses control-plane data only and does not query tenant WMS transaction databases.
-        </p>
       </Card>
     </section>
   );
+}
+
+function toTableRow(record: Record<string, unknown>): Record<string, ReactNode> {
+  const entries = Object.entries(record).slice(0, 8);
+  return Object.fromEntries(entries.map(([key, value]) => [key, renderCellValue(value)]));
+}
+
+function buildColumns(rows: Array<Record<string, ReactNode>>) {
+  const keys = rows[0] ? Object.keys(rows[0]) : [];
+  return keys.map((key) => ({ key, header: titleize(key) }));
+}
+
+function renderCellValue(value: unknown): ReactNode {
+  if (value === null || value === undefined || value === '') {
+    return 'UNASSIGNED';
+  }
+  if (typeof value === 'boolean') {
+    return <StatusBadge status={value ? 'YES' : 'NO'} variant={value ? 'success' : 'warning'} />;
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  const text = String(value);
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+function titleize(value: string) {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function ProfilePage({ user, mode }: { user: CurrentUser; mode: 'owner' | 'tenant' }) {

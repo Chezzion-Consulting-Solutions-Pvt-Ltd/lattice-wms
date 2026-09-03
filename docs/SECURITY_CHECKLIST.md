@@ -21,7 +21,7 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Tenant Master Data | Product Category CRUD | VERIFIED | Tenant DB-backed Product Category API tests pass; table exists in tenant DBs and not in control DB |
 | Tenant Administration | Active warehouse context | VERIFIED | Backend verifies active membership, active warehouse, and active assignment before session context change |
 | Session Management | Secure cookie/JWT strategy | VERIFIED | HttpOnly JWT cookies, tracked security-session model, Bearer auth, refresh, revoked/expired enforcement tests |
-| API Security | Versioned APIs | PARTIAL | `/api/v1/auth/login/`, `/api/v1/auth/login/context/`, `/api/v1/tenant/context/`, `/api/v1/tenant/probe/` |
+| API Security | Versioned APIs | PARTIAL | Auth, tenant, and expanded `/api/v1/control/owner/` APIs |
 | Application Security | Safe errors | PARTIAL | Exception classes and middleware |
 | Tenant Isolation | Header/query DB selector ignored | VERIFIED | Resolver and DB-backed acceptance tests pass |
 | Tenant Isolation | Missing tenant context fails closed | VERIFIED | Fast tests pass locally |
@@ -30,11 +30,11 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Encryption | TLS in production | PARTIAL | Settings and docs |
 | Secrets | Secret references, no plaintext tenant DB password columns | IMPLEMENTED | `TenantDatabase.secret_reference` |
 | File Security | Upload controls | NOT IMPLEMENTED | Future phase |
-| Audit | Structured append-only audit | PARTIAL | Control audit model and identity security events |
+| Audit | Structured append-only audit | PARTIAL | Control audit model, owner mutation audits, identity security events, and owner audit browsing API |
 | Logging | Request IDs | PARTIAL | Middleware |
 | Monitoring | Health checks | VERIFIED | Compose healthchecks for backend, frontend, Celery, PostgreSQL, and Redis |
-| Backups | Tenant backup metadata | NOT IMPLEMENTED | Future phase |
-| DR | PITR/restore workflow | NOT IMPLEMENTED | Future phase |
+| Backups | Tenant backup metadata | PARTIAL | `BackupPolicy` and `BackupRecord` control-plane metadata; local provider reports `NOT_CONFIGURED` |
+| DR | PITR/restore workflow | PARTIAL | `RestoreRequest` control-plane workflow exists; provider execution pending |
 | DevSecOps | CI security gates | PARTIAL | GitHub Actions scaffold |
 | Dependency Security | pip-audit/npm audit/Trivy | PARTIAL | CI placeholders |
 | Cloud/Network Security | Private DB/Redis design | VERIFIED | Compose publishes only backend/frontend ports; Postgres/Redis remain internal |

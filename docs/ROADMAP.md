@@ -16,9 +16,9 @@ Status values: `NOT STARTED`, `IN PROGRESS`, `BLOCKED`, `COMPLETE`.
 | Phase 9 | Integrations | NOT STARTED | Idempotency, retry, webhook security tests pass |
 | Phase 10 | Enterprise capabilities | NOT STARTED | SSO, SIEM, retention, DR automation evidence |
 
-## Current Milestone: Lattice Tenant Administration + Organizational Hierarchy
+## Current Milestone: Lattice Owner Console Completion
 
-Secure Core is complete and validated locally in Docker. Owner Console dashboard access starts from authenticated login. The active milestone is tenant/client authentication and tenant experience before tenant WMS operational functionality begins.
+Secure Core is complete and validated locally in Docker. The active milestone is completing the Owner / Platform Console before any additional Tenant Admin, warehouse hierarchy, master data, inbound, inventory, or outbound work.
 
 Completed hardening in this milestone:
 
@@ -31,10 +31,12 @@ Completed hardening in this milestone:
 
 Still in progress for Owner Console + Platform IAM:
 
-- Platform users, roles, permissions, role assignment, and support access administration APIs/UI.
-- Tenant management CRUD and lifecycle screens.
-- Plans, subscriptions, modules, feature flags, tenant modules, and tenant feature flag CRUD.
-- Real control-plane dashboard tables for tenant health, recent security events, migration status, and backup status.
+- Full page split from the large `OwnerConsole.tsx`.
+- Advanced tenant list filters, tenant detail tabs, tenant domain management, and end-to-end provisioning orchestration.
+- Platform role assignment UI and complete custom-role lifecycle.
+- Migration orchestration, backup provider execution, and restore execution.
+- Confirmation dialogs for every sensitive owner mutation.
+- Comprehensive Owner Console tests and Docker-backed validation after local PostgreSQL credentials are repaired.
 
 Completed in the tenant/client authentication foundation:
 

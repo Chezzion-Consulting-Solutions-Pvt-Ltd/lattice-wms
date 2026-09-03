@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 import redis
 
 from audit.models import AuditEvent
-from control.models import Subscription, Tenant, TenantDatabase
+from control.models import BackupRecord, License, Subscription, Tenant, TenantDatabase
 from identity.models import Permission, PlatformTenantAccessGrant, Role
 from lattice.celery import app as celery_app
 
@@ -41,6 +41,7 @@ class OwnerDashboardView(APIView):
         healthy_databases = TenantDatabase.objects.filter(health_status=TenantDatabase.HealthStatus.HEALTHY).count()
         database_warnings = TenantDatabase.objects.exclude(health_status=TenantDatabase.HealthStatus.HEALTHY).count()
         migration_warnings = TenantDatabase.objects.filter(migration_version="").count()
+        backup_warnings = tenants.count() - BackupRecord.objects.filter(status=BackupRecord.Status.HEALTHY).values("tenant_id").distinct().count()
         active_support_grants = PlatformTenantAccessGrant.objects.filter(expires_at__gt=timezone.now(), revoked_at__isnull=True).count()
         security_events = AuditEvent.objects.filter(result__in=[AuditEvent.Result.DENIED, AuditEvent.Result.FAILURE])
         recent_security_events = [self._serialize_event(event) for event in security_events[:8]]
@@ -61,9 +62,9 @@ class OwnerDashboardView(APIView):
                     "healthy_databases": healthy_databases,
                     "database_warnings": database_warnings,
                     "migration_warnings": migration_warnings,
-                    "backup_warnings": None,
-                    "backup_status": "NOT_IMPLEMENTED",
-                    "license_count": Tenant.objects.exclude(license_number="").count(),
+                    "backup_warnings": backup_warnings,
+                    "backup_status": "HEALTHY" if backup_warnings == 0 else "NOT_CONFIGURED",
+                    "license_count": License.objects.count() or Tenant.objects.exclude(license_number="").count(),
                     "active_users": get_user_model().objects.filter(is_active=True).count(),
                     "roles": Role.objects.count(),
                     "permissions": Permission.objects.count(),
@@ -74,8 +75,8 @@ class OwnerDashboardView(APIView):
                 "clients": tenant_health,
                 "infrastructure": {
                     "database_health": "HEALTHY" if database_warnings == 0 else "DEGRADED",
-                    "storage_usage": "NOT_IMPLEMENTED",
-                    "backup_status": "NOT_IMPLEMENTED",
+                    "storage_usage": "NOT_CONFIGURED",
+                    "backup_status": "HEALTHY" if backup_warnings == 0 else "NOT_CONFIGURED",
                     "migration_status": "CURRENT" if migration_warnings == 0 else "ATTENTION",
                     "service_health": "OK" if all(item["status"] == "OK" for item in service_health.values()) else "DEGRADED",
                 },
@@ -190,7 +191,8 @@ class OwnerTenantListCreateView(APIView):
                 {"error": {"code": "TENANT_CONFLICT", "message": "Tenant code already exists."}},
                 status=status.HTTP_409_CONFLICT,
             )
-        record_owner_audit(request, "TENANT_CREATE", tenant, after=tenant_audit_summary(tenant))
+        License.objects.get_or_create(tenant=tenant, defaults={"license_number": tenant.license_number})
+        record_owner_audit(request, "TENANT_CREATED", tenant, after=tenant_audit_summary(tenant))
         return JsonResponse({"tenant": serialize_tenant(tenant)}, status=status.HTTP_201_CREATED)
 
 
@@ -216,7 +218,7 @@ class OwnerTenantDetailView(APIView):
                     )
                 setattr(tenant, field, value)
         tenant.save(update_fields=[*editable_fields, "updated_at"])
-        record_owner_audit(request, "TENANT_UPDATE", tenant, before=before, after=tenant_audit_summary(tenant))
+        record_owner_audit(request, "TENANT_UPDATED", tenant, before=before, after=tenant_audit_summary(tenant))
         return JsonResponse({"tenant": serialize_tenant(tenant)})
 
 
@@ -300,11 +302,11 @@ class OwnerTenantStatusView(APIView):
             tenant.status = Tenant.Status.ACTIVE
             tenant.activated_at = timezone.now()
             tenant.suspended_at = None
-            audit_action = "TENANT_ACTIVATE"
+            audit_action = "TENANT_ACTIVATED"
         elif action == "suspend":
             tenant.status = Tenant.Status.SUSPENDED
             tenant.suspended_at = timezone.now()
-            audit_action = "TENANT_SUSPEND"
+            audit_action = "TENANT_SUSPENDED"
         else:
             return JsonResponse(
                 {"error": {"code": "UNKNOWN_ACTION", "message": "Unsupported tenant status action."}},

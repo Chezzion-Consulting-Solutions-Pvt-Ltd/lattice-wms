@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -116,9 +117,22 @@ class TenantDatabase(TimeStampedModel):
 
 
 class Plan(TimeStampedModel):
+    class BillingInterval(models.TextChoices):
+        MONTHLY = "MONTHLY", "Monthly"
+        ANNUAL = "ANNUAL", "Annual"
+        CUSTOM = "CUSTOM", "Custom"
+
     code = models.SlugField(max_length=80, unique=True)
     name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    billing_interval = models.CharField(max_length=24, choices=BillingInterval.choices, default=BillingInterval.MONTHLY)
+    user_limit = models.PositiveIntegerField(null=True, blank=True)
+    warehouse_limit = models.PositiveIntegerField(null=True, blank=True)
+    storage_limit_gb = models.PositiveIntegerField(null=True, blank=True)
+    api_limit_per_month = models.PositiveIntegerField(null=True, blank=True)
+    feature_entitlements = models.JSONField(default=dict, blank=True)
+    support_tier = models.CharField(max_length=80, blank=True)
 
 
 class PlanModule(TimeStampedModel):
@@ -130,17 +144,62 @@ class PlanModule(TimeStampedModel):
 
 
 class Subscription(TimeStampedModel):
+    class Status(models.TextChoices):
+        TRIAL = "TRIAL", "Trial"
+        ACTIVE = "ACTIVE", "Active"
+        PAST_DUE = "PAST_DUE", "Past due"
+        SUSPENDED = "SUSPENDED", "Suspended"
+        CANCELLED = "CANCELLED", "Cancelled"
+        EXPIRED = "EXPIRED", "Expired"
+
     tenant = models.OneToOneField(Tenant, on_delete=models.PROTECT, related_name="subscription")
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.ACTIVE)
+    trial_starts_at = models.DateTimeField(null=True, blank=True)
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
     starts_at = models.DateTimeField()
+    renews_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+    overrides = models.JSONField(default=dict, blank=True)
+
+
+class License(TimeStampedModel):
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        EXPIRING = "EXPIRING", "Expiring"
+        EXPIRED = "EXPIRED", "Expired"
+        REVOKED = "REVOKED", "Revoked"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.OneToOneField(Tenant, on_delete=models.PROTECT, related_name="license")
+    license_number = models.CharField(max_length=32, unique=True, default=generate_license_number, editable=False)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.ACTIVE)
+    issued_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+
+class ModuleDefinition(TimeStampedModel):
+    module_code = models.SlugField(max_length=80, unique=True)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+    dependencies = models.JSONField(default=list, blank=True)
 
 
 class TenantModule(TimeStampedModel):
+    class Source(models.TextChoices):
+        PLAN = "PLAN", "Plan"
+        OVERRIDE = "OVERRIDE", "Override"
+
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="modules")
     module_code = models.SlugField(max_length=80)
     enabled = models.BooleanField(default=True)
+    source = models.CharField(max_length=24, choices=Source.choices, default=Source.OVERRIDE)
 
     class Meta:
         unique_together = [("tenant", "module_code")]
@@ -148,14 +207,22 @@ class TenantModule(TimeStampedModel):
 
 class FeatureFlag(TimeStampedModel):
     code = models.SlugField(max_length=120, unique=True)
+    name = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
     enabled_by_default = models.BooleanField(default=False)
+    environment_metadata = models.JSONField(default=dict, blank=True)
 
 
 class TenantFeatureFlag(TimeStampedModel):
+    class OverrideState(models.TextChoices):
+        INHERIT = "INHERIT", "Inherit"
+        ENABLED = "ENABLED", "Enabled"
+        DISABLED = "DISABLED", "Disabled"
+
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="feature_flags")
     feature_flag = models.ForeignKey(FeatureFlag, on_delete=models.CASCADE)
     enabled = models.BooleanField(default=False)
+    override_state = models.CharField(max_length=24, choices=OverrideState.choices, default=OverrideState.INHERIT)
 
     class Meta:
         unique_together = [("tenant", "feature_flag")]
@@ -215,3 +282,79 @@ class RecoveryCode(TimeStampedModel):
     @classmethod
     def hash_code(cls, code: str) -> str:
         return make_password(code)
+
+
+class BackupPolicy(TimeStampedModel):
+    tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name="backup_policy")
+    provider = models.CharField(max_length=80, default="NOT_CONFIGURED")
+    retention_days = models.PositiveIntegerField(default=30)
+    region = models.CharField(max_length=64, blank=True)
+    enabled = models.BooleanField(default=False)
+
+
+class BackupRecord(TimeStampedModel):
+    class Status(models.TextChoices):
+        HEALTHY = "HEALTHY", "Healthy"
+        WARNING = "WARNING", "Warning"
+        FAILED = "FAILED", "Failed"
+        NOT_CONFIGURED = "NOT_CONFIGURED", "Not configured"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="backup_records")
+    provider = models.CharField(max_length=80, default="NOT_CONFIGURED")
+    region = models.CharField(max_length=64, blank=True)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.NOT_CONFIGURED)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    size_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    safe_error_summary = models.CharField(max_length=240, blank=True)
+    restore_point_reference = models.CharField(max_length=255, blank=True)
+
+
+class RestoreRequest(TimeStampedModel):
+    class Status(models.TextChoices):
+        REQUESTED = "REQUESTED", "Requested"
+        APPROVED = "APPROVED", "Approved"
+        PREPARING = "PREPARING", "Preparing"
+        RESTORING = "RESTORING", "Restoring"
+        VERIFYING = "VERIFYING", "Verifying"
+        COMPLETED = "COMPLETED", "Completed"
+        FAILED = "FAILED", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.PROTECT, related_name="restore_requests")
+    backup = models.ForeignKey(BackupRecord, on_delete=models.PROTECT, null=True, blank=True)
+    reason = models.CharField(max_length=240)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="restore_requests")
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="approved_restore_requests")
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.REQUESTED)
+    safe_error_summary = models.CharField(max_length=240, blank=True)
+    requested_at = models.DateTimeField(default=timezone.now)
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+
+class PlatformSetting(TimeStampedModel):
+    key = models.SlugField(max_length=120, unique=True)
+    value = models.JSONField(default=dict, blank=True)
+    description = models.CharField(max_length=240, blank=True)
+
+
+class OwnerNotification(TimeStampedModel):
+    class NotificationType(models.TextChoices):
+        TENANT_PROVISIONING_FAILED = "TENANT_PROVISIONING_FAILED", "Tenant provisioning failed"
+        TENANT_DB_UNHEALTHY = "TENANT_DB_UNHEALTHY", "Tenant database unhealthy"
+        BACKUP_FAILED = "BACKUP_FAILED", "Backup failed"
+        MIGRATION_FAILED = "MIGRATION_FAILED", "Migration failed"
+        LICENSE_EXPIRING = "LICENSE_EXPIRING", "License expiring"
+        SUBSCRIPTION_EXPIRING = "SUBSCRIPTION_EXPIRING", "Subscription expiring"
+        SUSPICIOUS_LOGIN = "SUSPICIOUS_LOGIN", "Suspicious login"
+        MFA_NON_COMPLIANT = "MFA_NON_COMPLIANT", "MFA non-compliant"
+        SUPPORT_ACCESS_REQUEST = "SUPPORT_ACCESS_REQUEST", "Support access request"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    notification_type = models.CharField(max_length=64, choices=NotificationType.choices)
+    title = models.CharField(max_length=160)
+    message = models.CharField(max_length=280)
+    source_type = models.CharField(max_length=80, blank=True)
+    source_id = models.CharField(max_length=120, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)

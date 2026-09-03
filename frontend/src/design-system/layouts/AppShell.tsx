@@ -34,11 +34,17 @@ const clientNavItems = [
 const ownerNavItems = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/owner/dashboard' },
   { label: 'Tenants', icon: Users, href: '/owner/tenants' },
+  { label: 'Plans', icon: KeyRound, href: '/owner/plans' },
   { label: 'Subscriptions', icon: KeyRound, href: '/owner/subscriptions' },
+  { label: 'Licenses', icon: KeyRound, href: '/owner/licenses' },
   { label: 'Modules', icon: Boxes, href: '/owner/modules' },
-  { label: 'Users & Access', icon: Shield, href: '/owner/users-access' },
-  { label: 'Infrastructure', icon: Database, href: '/owner/infrastructure' },
-  { label: 'Security', icon: Lock, href: '/owner/security' },
+  { label: 'Features', icon: Boxes, href: '/owner/features' },
+  { label: 'Users', icon: Shield, href: '/owner/users' },
+  { label: 'Roles', icon: Shield, href: '/owner/roles' },
+  { label: 'Databases', icon: Database, href: '/owner/infrastructure/databases' },
+  { label: 'Backups', icon: Database, href: '/owner/infrastructure/backups' },
+  { label: 'Security Events', icon: Lock, href: '/owner/security/events' },
+  { label: 'Audit Logs', icon: Lock, href: '/owner/security/audit' },
   { label: 'Reports', icon: ClipboardList, href: '/owner/reports' },
   { label: 'Settings', icon: Settings, href: '/owner/settings' },
 ];
@@ -125,7 +131,7 @@ export function AppShell({
           </div>
           <div className="lattice-topbar__actions">
             <Tooltip label="Notifications">
-              <IconButton label="Notifications" icon={<Bell size={17} />} />
+              <IconButton label="Notifications" icon={<Bell size={17} />} onClick={() => navigateToAppPage(mode === 'owner' ? '/owner/settings/notifications' : '/tenant/settings')} />
             </Tooltip>
             <DropdownMenu
               trigger={

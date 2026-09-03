@@ -1,5 +1,31 @@
 # Lattice Implementation Status
 
+## 2026-09-03
+
+### Implemented
+
+- Expanded the Owner Console control-plane data model with dedicated license records, module definitions, backup policy/record metadata, restore requests, platform settings, and owner notifications.
+- Added owner API modules under `control/api/` for commercial administration, modules/features, platform access, infrastructure, security/audit, reports, settings, and notifications.
+- Added clean `/api/v1/control/owner/` routes for plans, subscriptions, licenses, modules, feature flags, platform users, roles, permissions, support access, tenant databases, migrations, backups, restore, service health, security events, audit logs, sessions, MFA compliance, reports, settings, and notifications.
+- Updated tenant creation to create a first-class `License` record and to audit with the requested `TENANT_CREATED`, `TENANT_UPDATED`, `TENANT_ACTIVATED`, and `TENANT_SUSPENDED` names.
+- Replaced Owner Console grouped placeholder routes with direct page routes backed by real owner APIs.
+- Updated the Owner navigation and notification bell so Owner links resolve to functional data-backed pages.
+- Changed local backup reporting from `NOT_IMPLEMENTED` to truthful `NOT_CONFIGURED` metadata unless a real backup provider exists.
+
+### Validation Executed
+
+- `.venv\Scripts\python.exe backend\manage.py check`: passed.
+- `.venv\Scripts\python.exe backend\manage.py makemigrations --check`: passed with no model changes pending; local Postgres credential check still warns.
+- `frontend npm.cmd run build`: passed.
+- `frontend npm.cmd run lint`: passed.
+- Focused owner pytest was attempted but blocked before assertions because local PostgreSQL rejects `lattice_control_app` credentials.
+
+### Known Limitations
+
+- Owner Console is not complete. Full tenant provisioning, domain verification, migration orchestration, backup provider execution, restore execution, advanced table filters, confirmation dialogs on every sensitive action, and comprehensive owner tests remain in progress.
+- Local database-backed validation is blocked until the PostgreSQL credentials/runtime are repaired.
+- Tenant Admin hierarchy, master data expansion, inbound, inventory, and outbound remain out of scope for this Owner Console milestone.
+
 ## 2026-09-01
 
 ### Implemented

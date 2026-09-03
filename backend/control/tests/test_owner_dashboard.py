@@ -157,10 +157,10 @@ def test_owner_tenant_crud_lifecycle_and_audit(db):
     assert suspended.json()["tenant"]["status"] == Tenant.Status.SUSPENDED
 
     actions = list(AuditEvent.objects.filter(global_user_id=owner.id).values_list("action", flat=True))
-    assert "TENANT_CREATE" in actions
-    assert "TENANT_UPDATE" in actions
-    assert "TENANT_ACTIVATE" in actions
-    assert "TENANT_SUSPEND" in actions
+    assert "TENANT_CREATED" in actions
+    assert "TENANT_UPDATED" in actions
+    assert "TENANT_ACTIVATED" in actions
+    assert "TENANT_SUSPENDED" in actions
 
 
 def test_owner_can_register_tenant_database_without_exposing_secret_reference(db):
