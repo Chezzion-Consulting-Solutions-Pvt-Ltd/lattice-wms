@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from control.api.common import IsOwnerConsoleUser, bool_from_request, record_owner_audit, validation_error
 from control.api.serializers import feature_summary, module_summary, tenant_feature_summary, tenant_module_summary
-from control.models import FeatureFlag, ModuleDefinition, Tenant, TenantFeatureFlag, TenantModule
+from control.models import FeatureFlag, ModuleDefinition, Tenant, TenantFeatureFlag, TenantModule, TenantModuleHistory
 
 
 DEFAULT_MODULES = [
@@ -26,6 +26,7 @@ DEFAULT_MODULES = [
 class OwnerModuleListCreateView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permissions = {"GET": "platform.modules.view", "POST": "platform.modules.manage"}
 
     def get(self, request):
         ensure_default_modules()
@@ -56,6 +57,11 @@ class OwnerModuleListCreateView(APIView):
 class OwnerModuleDetailView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permissions = {"GET": "platform.modules.view", "PATCH": "platform.modules.manage"}
+
+    def get(self, request, module_id):
+        module = get_object_or_404(ModuleDefinition, id=module_id)
+        return JsonResponse({"module": module_summary(module)})
 
     def patch(self, request, module_id):
         module = get_object_or_404(ModuleDefinition, id=module_id)
@@ -74,9 +80,31 @@ class OwnerModuleDetailView(APIView):
         return JsonResponse({"module": module_summary(module)})
 
 
+class OwnerModuleActionView(APIView):
+    throttle_scope = "admin_api"
+    permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.modules.manage"
+
+    def post(self, request, module_id, action):
+        module = get_object_or_404(ModuleDefinition, id=module_id)
+        before = module_summary(module)
+        if action == "activate":
+            module.active = True
+            audit_action = "MODULE_ACTIVATED"
+        elif action == "deactivate":
+            module.active = False
+            audit_action = "MODULE_DEACTIVATED"
+        else:
+            return validation_error("Unsupported module action.", "UNKNOWN_ACTION", status.HTTP_404_NOT_FOUND)
+        module.save(update_fields=["active", "updated_at"])
+        record_owner_audit(request, audit_action, resource_type="ModuleDefinition", resource_id=str(module.id), before=before, after=module_summary(module))
+        return JsonResponse({"module": module_summary(module)})
+
+
 class OwnerTenantModuleView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.modules.manage"
 
     def post(self, request, tenant_id):
         tenant = get_object_or_404(Tenant, id=tenant_id)
@@ -84,10 +112,18 @@ class OwnerTenantModuleView(APIView):
         if not module_code:
             return validation_error("Module code is required.")
         enabled = bool_from_request(request.data.get("enabled"), True)
+        previous = TenantModule.objects.filter(tenant=tenant, module_code=module_code).first()
         entitlement, created = TenantModule.objects.update_or_create(
             tenant=tenant,
             module_code=module_code,
-            defaults={"enabled": enabled, "source": TenantModule.Source.OVERRIDE},
+            defaults={"enabled": enabled, "source": TenantModule.Source.OVERRIDE, "override_state": TenantModule.OverrideState.ENABLED if enabled else TenantModule.OverrideState.DISABLED},
+        )
+        TenantModuleHistory.objects.create(
+            tenant=tenant,
+            module_code=module_code,
+            previous_state=previous.override_state if previous else "",
+            new_state=entitlement.override_state,
+            changed_by=request.user,
         )
         record_owner_audit(
             request,
@@ -102,6 +138,7 @@ class OwnerTenantModuleView(APIView):
 class OwnerFeatureListCreateView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permissions = {"GET": "platform.features.view", "POST": "platform.features.manage"}
 
     def get(self, request):
         flags = FeatureFlag.objects.order_by("code")
@@ -117,6 +154,7 @@ class OwnerFeatureListCreateView(APIView):
                 code=code,
                 name=str(request.data.get("name", code)).strip(),
                 description=str(request.data.get("description", "")).strip(),
+                active=bool_from_request(request.data.get("active"), True),
                 enabled_by_default=bool_from_request(request.data.get("enabled_by_default"), False),
                 environment_metadata=request.data.get("environment_metadata", {}),
             )
@@ -129,6 +167,11 @@ class OwnerFeatureListCreateView(APIView):
 class OwnerFeatureDetailView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permissions = {"GET": "platform.features.view", "PATCH": "platform.features.manage"}
+
+    def get(self, request, feature_id):
+        flag = get_object_or_404(FeatureFlag, id=feature_id)
+        return JsonResponse({"feature": feature_summary(flag)})
 
     def patch(self, request, feature_id):
         flag = get_object_or_404(FeatureFlag, id=feature_id)
@@ -136,6 +179,8 @@ class OwnerFeatureDetailView(APIView):
         for field in ["name", "description"]:
             if field in request.data:
                 setattr(flag, field, str(request.data.get(field, "")).strip())
+        if "active" in request.data:
+            flag.active = bool_from_request(request.data.get("active"), True)
         if "enabled_by_default" in request.data:
             flag.enabled_by_default = bool_from_request(request.data.get("enabled_by_default"), False)
         if "environment_metadata" in request.data:
@@ -145,9 +190,31 @@ class OwnerFeatureDetailView(APIView):
         return JsonResponse({"feature": feature_summary(flag)})
 
 
+class OwnerFeatureActionView(APIView):
+    throttle_scope = "admin_api"
+    permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.features.manage"
+
+    def post(self, request, feature_id, action):
+        flag = get_object_or_404(FeatureFlag, id=feature_id)
+        before = feature_summary(flag)
+        if action == "activate":
+            flag.active = True
+            audit_action = "FEATURE_FLAG_ACTIVATED"
+        elif action == "deactivate":
+            flag.active = False
+            audit_action = "FEATURE_FLAG_DEACTIVATED"
+        else:
+            return validation_error("Unsupported feature action.", "UNKNOWN_ACTION", status.HTTP_404_NOT_FOUND)
+        flag.save(update_fields=["active", "updated_at"])
+        record_owner_audit(request, audit_action, resource_type="FeatureFlag", resource_id=str(flag.id), before=before, after=feature_summary(flag))
+        return JsonResponse({"feature": feature_summary(flag)})
+
+
 class OwnerTenantFeatureView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.features.manage"
 
     def post(self, request, tenant_id):
         tenant = get_object_or_404(Tenant, id=tenant_id)

@@ -41,11 +41,13 @@ export function ConfirmationDialog({
   description,
   trigger,
   confirmLabel = 'Confirm',
+  onConfirm,
 }: {
   title: string;
   description: string;
   trigger: ReactNode;
   confirmLabel?: string;
+  onConfirm?: () => void;
 }) {
   return (
     <AlertDialog.Root>
@@ -60,7 +62,7 @@ export function ConfirmationDialog({
               <Button variant="secondary">Cancel</Button>
             </AlertDialog.Cancel>
             <AlertDialog.Action asChild>
-              <Button variant="danger">{confirmLabel}</Button>
+              <Button variant="danger" onClick={onConfirm}>{confirmLabel}</Button>
             </AlertDialog.Action>
           </div>
         </AlertDialog.Content>

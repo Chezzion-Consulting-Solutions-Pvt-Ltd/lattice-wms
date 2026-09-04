@@ -14,12 +14,35 @@ from audit.models import AuditEvent
 class IsOwnerConsoleUser(IsAuthenticated):
     def has_permission(self, request, view) -> bool:
         user = getattr(request, "user", None)
+        required_permission = required_owner_permission(request, view)
         return bool(
             super().has_permission(request, view)
             and user
             and user.is_active
             and (user.is_staff or user.is_platform_admin or user.is_superuser)
+            and required_permission
+            and user_has_platform_permission(user, required_permission)
         )
+
+
+def required_owner_permission(request, view) -> str:
+    if hasattr(view, "get_required_permission"):
+        return view.get_required_permission(request)
+    permission_map = getattr(view, "required_permissions", {})
+    if permission_map:
+        return permission_map.get(request.method, permission_map.get("*", ""))
+    return getattr(view, "required_permission", "")
+
+
+def user_has_platform_permission(user, permission_code: str) -> bool:
+    if not permission_code:
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    from identity.models import PlatformUserRole, RolePermission
+
+    role_ids = PlatformUserRole.objects.filter(user=user, role__is_active=True, role__scope="PLATFORM").values_list("role_id", flat=True)
+    return RolePermission.objects.filter(role_id__in=role_ids, permission__code=permission_code).exists()
 
 
 def validation_error(message: str, code: str = "VALIDATION_ERROR", http_status: int = status.HTTP_400_BAD_REQUEST) -> JsonResponse:

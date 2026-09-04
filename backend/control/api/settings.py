@@ -26,6 +26,7 @@ SAFE_SETTING_KEYS = {
 class OwnerSettingsView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permissions = {"GET": "platform.settings.view", "PATCH": "platform.settings.manage"}
 
     def get(self, request):
         ensure_default_settings()
@@ -48,6 +49,7 @@ class OwnerSettingsView(APIView):
 class OwnerNotificationsView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.notifications.view"
 
     def get(self, request):
         notifications = OwnerNotification.objects.order_by("-created_at")[:100]
@@ -57,6 +59,7 @@ class OwnerNotificationsView(APIView):
 class OwnerNotificationReadView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.notifications.manage"
 
     def post(self, request, notification_id):
         notification = get_object_or_404(OwnerNotification, id=notification_id)
@@ -68,6 +71,7 @@ class OwnerNotificationReadView(APIView):
 class OwnerNotificationsMarkAllReadView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.notifications.manage"
 
     def post(self, request):
         OwnerNotification.objects.filter(read_at__isnull=True).update(read_at=timezone.now())

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
+from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db import connection
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -12,7 +14,20 @@ from rest_framework.views import APIView
 import redis
 
 from audit.models import AuditEvent
-from control.models import BackupRecord, License, Subscription, Tenant, TenantDatabase
+from control.api.serializers import (
+    backup_policy_summary,
+    backup_record_summary,
+    domain_summary,
+    license_summary,
+    restore_request_summary,
+    subscription_summary,
+    support_access_summary,
+    tenant_feature_summary,
+    tenant_module_summary,
+    tenant_summary,
+)
+from control.api.common import required_owner_permission, user_has_platform_permission
+from control.models import BackupRecord, License, RestoreRequest, Subscription, Tenant, TenantDatabase, TenantFeatureFlag, TenantModule
 from identity.models import Permission, PlatformTenantAccessGrant, Role
 from lattice.celery import app as celery_app
 
@@ -20,17 +35,21 @@ from lattice.celery import app as celery_app
 class IsOwnerConsoleUser(IsAuthenticated):
     def has_permission(self, request, view) -> bool:
         user = getattr(request, "user", None)
+        required_permission = required_owner_permission(request, view)
         return bool(
             super().has_permission(request, view)
             and user
             and user.is_active
             and (user.is_staff or user.is_platform_admin or user.is_superuser)
+            and required_permission
+            and user_has_platform_permission(user, required_permission)
         )
 
 
 class OwnerDashboardView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.dashboard.view"
 
     def get(self, request):
         tenants = Tenant.objects.prefetch_related("domains").select_related("database").order_by("tenant_code")
@@ -117,9 +136,11 @@ class OwnerDashboardView(APIView):
                 "runtime_role": "",
                 "sslmode": "",
                 "provisioning_status": "MISSING",
+                "provisioning_step": "MISSING",
                 "health_status": "MISSING",
                 "migration_version": "",
                 "last_health_check": None,
+                "safe_error_summary": "",
             }
             if database is None
             else {
@@ -130,9 +151,11 @@ class OwnerDashboardView(APIView):
                 "runtime_role": database.runtime_role_name,
                 "sslmode": database.sslmode,
                 "provisioning_status": database.provisioning_status,
+                "provisioning_step": database.provisioning_step,
                 "health_status": database.health_status,
                 "migration_version": database.migration_version,
                 "last_health_check": database.last_health_check.isoformat() if database.last_health_check else None,
+                "safe_error_summary": database.safe_error_summary,
             },
         }
 
@@ -163,10 +186,53 @@ class OwnerDashboardView(APIView):
 class OwnerTenantListCreateView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permissions = {"GET": "platform.tenants.view", "POST": "platform.tenants.create"}
 
     def get(self, request):
         tenants = Tenant.objects.prefetch_related("domains").select_related("database").order_by("tenant_code")
-        return JsonResponse({"tenants": [serialize_tenant(tenant) for tenant in tenants]})
+        search = request.GET.get("search", "").strip()
+        if search:
+            tenants = tenants.filter(Q(tenant_code__icontains=search) | Q(display_name__icontains=search) | Q(legal_name__icontains=search) | Q(license_number__icontains=search) | Q(domains__hostname__icontains=search)).distinct()
+        if request.GET.get("status"):
+            tenants = tenants.filter(status=request.GET["status"])
+        if request.GET.get("region"):
+            tenants = tenants.filter(region=request.GET["region"])
+        if request.GET.get("plan"):
+            plan = request.GET["plan"]
+            tenants = tenants.filter(Q(subscription_plan__icontains=plan) | Q(subscription__plan__code__icontains=plan) | Q(subscription__plan__name__icontains=plan)).distinct()
+        if request.GET.get("database_health"):
+            tenants = tenants.filter(database__health_status=request.GET["database_health"])
+
+        allowed_sort_fields = {
+            "tenant": "display_name",
+            "tenant_code": "tenant_code",
+            "status": "status",
+            "region": "region",
+            "created": "created_at",
+            "database": "database__provisioning_status",
+            "migration": "database__migration_version",
+        }
+        sort = request.GET.get("sort", "tenant_code")
+        direction = "-" if request.GET.get("direction") == "desc" else ""
+        tenants = tenants.order_by(f"{direction}{allowed_sort_fields.get(sort, 'tenant_code')}")
+
+        page_size = min(max(int(request.GET.get("page_size", 25) or 25), 1), 100)
+        paginator = Paginator(tenants, page_size)
+        page_number = max(int(request.GET.get("page", 1) or 1), 1)
+        page = paginator.get_page(page_number)
+        return JsonResponse(
+            {
+                "tenants": [serialize_tenant(tenant) for tenant in page.object_list],
+                "pagination": {
+                    "page": page.number,
+                    "page_size": page_size,
+                    "total": paginator.count,
+                    "pages": paginator.num_pages,
+                    "has_next": page.has_next(),
+                    "has_previous": page.has_previous(),
+                },
+            }
+        )
 
     def post(self, request):
         tenant_code = str(request.data.get("tenant_code", "")).strip().lower()
@@ -199,6 +265,7 @@ class OwnerTenantListCreateView(APIView):
 class OwnerTenantDetailView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permissions = {"GET": "platform.tenants.view", "PATCH": "platform.tenants.edit"}
 
     def get(self, request, tenant_id):
         tenant = get_owner_tenant(tenant_id)
@@ -222,9 +289,57 @@ class OwnerTenantDetailView(APIView):
         return JsonResponse({"tenant": serialize_tenant(tenant)})
 
 
+class OwnerTenantRelatedView(APIView):
+    throttle_scope = "admin_api"
+    permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.tenants.view"
+
+    def get(self, request, tenant_id):
+        tenant = get_object_or_404(
+            Tenant.objects.prefetch_related("domains", "modules", "feature_flags__feature_flag", "backup_records", "restore_requests").select_related(
+                "database", "configuration", "subscription__plan", "license__plan", "backup_policy"
+            ),
+            id=tenant_id,
+        )
+        try:
+            subscription = subscription_summary(tenant.subscription)
+        except Subscription.DoesNotExist:
+            subscription = None
+        try:
+            license_record = license_summary(tenant.license)
+        except License.DoesNotExist:
+            license_record = None
+        backup_policy = getattr(tenant, "backup_policy", None)
+        return JsonResponse(
+            {
+                "tenant": tenant_summary(tenant),
+                "tabs": {
+                    "domains": [domain_summary(domain) for domain in tenant.domains.order_by("-is_primary", "hostname")],
+                    "subscription": subscription,
+                    "license": license_record,
+                    "modules": [tenant_module_summary(module) for module in TenantModule.objects.filter(tenant=tenant).order_by("module_code")],
+                    "feature_flags": [tenant_feature_summary(flag) for flag in TenantFeatureFlag.objects.select_related("feature_flag").filter(tenant=tenant).order_by("feature_flag__code")],
+                    "support_access": [
+                        support_access_summary(grant)
+                        for grant in PlatformTenantAccessGrant.objects.select_related("user", "tenant", "approved_by").filter(tenant=tenant).order_by("-created_at")[:20]
+                    ],
+                    "backups": {
+                        "policy": backup_policy_summary(backup_policy, tenant),
+                        "records": [backup_record_summary(record) for record in tenant.backup_records.order_by("-started_at", "-created_at")[:20]],
+                    },
+                    "restore_requests": [
+                        restore_request_summary(item)
+                        for item in RestoreRequest.objects.select_related("tenant", "backup", "requested_by", "approved_by").filter(tenant=tenant).order_by("-requested_at")[:20]
+                    ],
+                },
+            }
+        )
+
+
 class OwnerTenantDatabaseView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.infrastructure.manage"
 
     def put(self, request, tenant_id):
         tenant = get_owner_tenant(tenant_id)
@@ -294,16 +409,23 @@ class OwnerTenantDatabaseView(APIView):
 class OwnerTenantStatusView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.tenants.suspend"
 
     def post(self, request, tenant_id, action):
         tenant = get_owner_tenant(tenant_id)
         before = tenant_audit_summary(tenant)
+        reason = str(request.data.get("reason", "")).strip()
         if action == "activate":
             tenant.status = Tenant.Status.ACTIVE
             tenant.activated_at = timezone.now()
             tenant.suspended_at = None
             audit_action = "TENANT_ACTIVATED"
         elif action == "suspend":
+            if not reason:
+                return JsonResponse(
+                    {"error": {"code": "VALIDATION_ERROR", "message": "A suspension reason is required."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             tenant.status = Tenant.Status.SUSPENDED
             tenant.suspended_at = timezone.now()
             audit_action = "TENANT_SUSPENDED"
@@ -313,7 +435,10 @@ class OwnerTenantStatusView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         tenant.save(update_fields=["status", "activated_at", "suspended_at", "updated_at"])
-        record_owner_audit(request, audit_action, tenant, before=before, after=tenant_audit_summary(tenant))
+        after = tenant_audit_summary(tenant)
+        if reason:
+            after["reason"] = reason[:240]
+        record_owner_audit(request, audit_action, tenant, before=before, after=after)
         return JsonResponse({"tenant": serialize_tenant(tenant)})
 
 
@@ -386,7 +511,9 @@ def database_audit_summary(database: TenantDatabase | None) -> dict[str, object]
         "sslmode": database.sslmode,
         "migration_version": database.migration_version,
         "provisioning_status": database.provisioning_status,
+        "provisioning_step": database.provisioning_step,
         "health_status": database.health_status,
+        "safe_error_summary": database.safe_error_summary,
         "secret_reference_configured": bool(database.secret_reference),
     }
 

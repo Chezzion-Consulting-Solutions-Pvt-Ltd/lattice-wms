@@ -11,6 +11,7 @@ from control.api.serializers import audit_summary
 class OwnerSecurityEventsView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.security.view"
 
     def get(self, request):
         events = apply_event_filters(AuditEvent.objects.filter(result__in=[AuditEvent.Result.DENIED, AuditEvent.Result.FAILURE]), request).order_by("-timestamp")[:100]
@@ -20,6 +21,7 @@ class OwnerSecurityEventsView(APIView):
 class OwnerAuditLogsView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
+    required_permission = "platform.audit.view"
 
     def get(self, request):
         events = apply_event_filters(AuditEvent.objects.all(), request).order_by("-timestamp")[:100]

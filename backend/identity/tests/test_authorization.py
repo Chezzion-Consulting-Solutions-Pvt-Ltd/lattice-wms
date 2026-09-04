@@ -5,9 +5,10 @@ from django.contrib.auth import get_user_model
 from django.test import Client
 from django.utils import timezone
 
+from control.api.access import ensure_default_roles
 from control.models import Tenant, TenantDatabase, TenantDomain, TenantMembership, TenantModule
 from identity.authorization import has_permission, has_platform_tenant_access, has_warehouse_access
-from identity.models import MembershipRole, Permission, PlatformTenantAccessGrant, Role, RolePermission, SecuritySession, WarehouseAssignment
+from identity.models import MembershipRole, Permission, PlatformTenantAccessGrant, PlatformUserRole, Role, RolePermission, SecuritySession, WarehouseAssignment
 
 
 def _api_login(client: Client, email: str, password: str):
@@ -115,8 +116,10 @@ def test_platform_support_access_requires_active_time_limited_grant():
 def test_owner_dashboard_owner_read_includes_unique_license_numbers():
     _tenant("alpha")
     _tenant("beta")
+    ensure_default_roles()
     client = Client()
-    owner = get_user_model().objects.create_user(email="owner-dashboard@example.test", password="StrongerPass123!", is_staff=True)
+    owner = get_user_model().objects.create_user(email="owner-dashboard@example.test", password="StrongerPass123!", is_staff=True, is_platform_admin=False)
+    PlatformUserRole.objects.create(user=owner, role=Role.objects.get(code="PLATFORM_ADMIN"))
     assert _api_login(client, owner.email, "StrongerPass123!").status_code == 200
     assert SecuritySession.objects.filter(user=owner, revoked_at__isnull=True).exists()
 

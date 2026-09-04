@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from control.models import Tenant, TenantMembership, TenantModule
-from identity.models import MembershipRole, Permission, Role, RolePermission
+from identity.models import MembershipRole, Permission, PlatformUserRole, Role, RolePermission
 
 
 OWNER_EMAIL = "owner@lattice.local"
@@ -93,7 +93,56 @@ class Command(BaseCommand):
         owner.failed_login_count = 0
         owner.locked_until = None
         owner.save()
+        platform_role = self._create_local_platform_role()
+        PlatformUserRole.objects.get_or_create(user=owner, role=platform_role)
         return owner
+
+    def _create_local_platform_role(self) -> Role:
+        permissions = [
+            "platform.dashboard.view",
+            "platform.tenants.view",
+            "platform.tenants.create",
+            "platform.tenants.edit",
+            "platform.tenants.suspend",
+            "platform.tenants.provision",
+            "platform.domains.view",
+            "platform.domains.manage",
+            "platform.plans.view",
+            "platform.plans.manage",
+            "platform.subscriptions.view",
+            "platform.subscriptions.manage",
+            "platform.licenses.view",
+            "platform.licenses.manage",
+            "platform.modules.view",
+            "platform.modules.manage",
+            "platform.features.view",
+            "platform.features.manage",
+            "platform.users.view",
+            "platform.users.manage",
+            "platform.roles.view",
+            "platform.roles.manage",
+            "platform.permissions.view",
+            "platform.support_access.view",
+            "platform.support_access.manage",
+            "platform.infrastructure.view",
+            "platform.infrastructure.manage",
+            "platform.security.view",
+            "platform.audit.view",
+            "platform.reports.view",
+            "platform.reports.export",
+            "platform.settings.view",
+            "platform.settings.manage",
+            "platform.notifications.view",
+            "platform.notifications.manage",
+        ]
+        role, _ = Role.objects.update_or_create(
+            code="PLATFORM_ADMIN",
+            defaults={"name": "Platform Admin", "scope": Role.Scope.PLATFORM, "requires_mfa": True, "is_active": True},
+        )
+        for code in permissions:
+            permission, _ = Permission.objects.get_or_create(code=code)
+            RolePermission.objects.get_or_create(role=role, permission=permission)
+        return role
 
     def _create_local_tenant_role(self) -> Role:
         role, _ = Role.objects.update_or_create(

@@ -82,6 +82,10 @@ DATABASES = {
     }
 }
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = int(os.environ.get("POSTGRES_PORT", "5432"))
+POSTGRES_SSLMODE = os.environ.get("POSTGRES_SSLMODE", "prefer")
+POSTGRES_ADMIN_USER = os.environ.get("POSTGRES_ADMIN_USER", "")
+POSTGRES_ADMIN_PASSWORD = os.environ.get("POSTGRES_ADMIN_PASSWORD", "")
 POSTGRES_CONNECT_TIMEOUT = int(os.environ.get("POSTGRES_CONNECT_TIMEOUT", "5"))
 
 DATABASE_ROUTERS = ["tenancy.db_router.LatticeDatabaseRouter"]

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.utils import timezone
+
 from audit.models import AuditEvent
 from control.models import (
     BackupPolicy,
@@ -16,12 +18,14 @@ from control.models import (
     RestoreRequest,
     Subscription,
     Tenant,
+    TenantAdminInvitation,
+    TenantConfiguration,
     TenantDatabase,
     TenantDomain,
     TenantFeatureFlag,
     TenantModule,
 )
-from identity.models import MfaDevice, Permission, PlatformTenantAccessGrant, Role, SecuritySession
+from identity.models import MfaDevice, Permission, PlatformTenantAccessGrant, PlatformUserRole, Role, SecuritySession
 
 
 def iso(value) -> str | None:
@@ -57,6 +61,8 @@ def tenant_summary(tenant: Tenant) -> dict[str, Any]:
         "activated_at": iso(tenant.activated_at),
         "suspended_at": iso(tenant.suspended_at),
         "database": database_summary(database),
+        "configuration": configuration_summary(getattr(tenant, "configuration", None)),
+        "admin_invitations": [admin_invitation_summary(invitation) for invitation in tenant.admin_invitations.order_by("-created_at")[:5]],
     }
 
 
@@ -70,10 +76,12 @@ def database_summary(database: TenantDatabase | None) -> dict[str, Any]:
             "runtime_role": "",
             "sslmode": "",
             "provisioning_status": "MISSING",
+            "provisioning_step": "MISSING",
             "health_status": "MISSING",
             "migration_version": "",
             "last_health_check": None,
             "secret_reference_configured": False,
+            "safe_error_summary": "",
         }
     return {
         "alias": database.database_alias,
@@ -83,10 +91,38 @@ def database_summary(database: TenantDatabase | None) -> dict[str, Any]:
         "runtime_role": database.runtime_role_name,
         "sslmode": database.sslmode,
         "provisioning_status": database.provisioning_status,
+        "provisioning_step": database.provisioning_step,
         "health_status": database.health_status,
         "migration_version": database.migration_version,
         "last_health_check": iso(database.last_health_check),
         "secret_reference_configured": bool(database.secret_reference),
+        "safe_error_summary": database.safe_error_summary,
+    }
+
+
+def configuration_summary(configuration: TenantConfiguration | None) -> dict[str, Any]:
+    if configuration is None:
+        return {"status": "MISSING", "timezone": "", "language": "", "enabled_module_defaults": [], "security_policy": {}}
+    return {
+        "status": configuration.status,
+        "timezone": configuration.timezone,
+        "language": configuration.language,
+        "enabled_module_defaults": configuration.enabled_module_defaults,
+        "security_policy": configuration.security_policy,
+    }
+
+
+def admin_invitation_summary(invitation: TenantAdminInvitation) -> dict[str, Any]:
+    return {
+        "id": str(invitation.id),
+        "email": invitation.email,
+        "first_name": invitation.first_name,
+        "last_name": invitation.last_name,
+        "status": invitation.status,
+        "expires_at": iso(invitation.expires_at),
+        "accepted_at": iso(invitation.accepted_at),
+        "revoked_at": iso(invitation.revoked_at),
+        "created_at": iso(invitation.created_at),
     }
 
 
@@ -111,14 +147,21 @@ def plan_summary(plan: Plan) -> dict[str, Any]:
         "name": plan.name,
         "description": plan.description,
         "active": plan.is_active,
+        "is_active": plan.is_active,
         "billing_interval": plan.billing_interval,
+        "price_metadata": plan.price_metadata,
+        "currency": plan.currency,
         "user_limit": plan.user_limit,
         "warehouse_limit": plan.warehouse_limit,
         "storage_limit_gb": plan.storage_limit_gb,
+        "storage_limit": plan.storage_limit_gb,
         "api_limit_per_month": plan.api_limit_per_month,
+        "api_limit": plan.api_limit_per_month,
         "included_modules": list(plan.modules.order_by("module_code").values_list("module_code", flat=True)),
         "feature_entitlements": plan.feature_entitlements,
         "support_tier": plan.support_tier,
+        "created_at": iso(plan.created_at),
+        "updated_at": iso(plan.updated_at),
     }
 
 
@@ -135,10 +178,14 @@ def subscription_summary(subscription: Subscription) -> dict[str, Any]:
         "trial_ends_at": iso(subscription.trial_ends_at),
         "starts_at": iso(subscription.starts_at),
         "renews_at": iso(subscription.renews_at),
+        "renewal_at": iso(subscription.renews_at),
         "ends_at": iso(subscription.ends_at),
         "is_active": subscription.is_active,
         "notes": subscription.notes,
         "overrides": subscription.overrides,
+        "override_metadata": subscription.overrides,
+        "created_at": iso(subscription.created_at),
+        "updated_at": iso(subscription.updated_at),
     }
 
 
@@ -177,6 +224,7 @@ def tenant_module_summary(entitlement: TenantModule) -> dict[str, Any]:
         "module_code": entitlement.module_code,
         "enabled": entitlement.enabled,
         "source": entitlement.source,
+        "override_state": entitlement.override_state,
     }
 
 
@@ -186,6 +234,7 @@ def feature_summary(flag: FeatureFlag) -> dict[str, Any]:
         "code": flag.code,
         "name": flag.name or flag.code,
         "description": flag.description,
+        "active": flag.active,
         "enabled_by_default": flag.enabled_by_default,
         "environment_metadata": flag.environment_metadata,
     }
@@ -218,6 +267,7 @@ def user_summary(user) -> dict[str, Any]:
         "is_active": user.is_active,
         "is_staff": user.is_staff,
         "is_platform_admin": user.is_platform_admin,
+        "platform_roles": list(user.platform_role_assignments.select_related("role").order_by("role__code").values_list("role__code", flat=True)),
         "mfa_required": user.mfa_required,
         "mfa_enabled": bool(device and device.enabled and device.confirmed_at),
         "active_sessions": active_sessions,
@@ -232,8 +282,10 @@ def role_summary(role: Role) -> dict[str, Any]:
         "code": role.code,
         "name": role.name,
         "scope": role.scope,
+        "is_active": role.is_active,
         "requires_mfa": role.requires_mfa,
         "permissions": list(role.permissions.order_by("code").values_list("code", flat=True)),
+        "assigned_users": PlatformUserRole.objects.filter(role=role).count() if role.scope == Role.Scope.PLATFORM else 0,
     }
 
 
@@ -248,14 +300,27 @@ def support_access_summary(grant: PlatformTenantAccessGrant) -> dict[str, Any]:
         "tenant": grant.tenant.display_name,
         "tenant_id": str(grant.tenant_id),
         "reason": grant.reason,
-        "scope": "tenant",
-        "approved_by": grant.approved_by.email,
-        "approved_at": iso(grant.created_at),
-        "starts_at": iso(grant.created_at),
+        "scope": grant.scope,
+        "approved_by": grant.approved_by.email if grant.approved_by else "",
+        "approved_at": iso(grant.approved_at),
+        "starts_at": iso(grant.starts_at),
         "expires_at": iso(grant.expires_at),
         "revoked_at": iso(grant.revoked_at),
-        "status": "REVOKED" if grant.revoked_at else "ACTIVE",
+        "status": effective_support_access_status(grant),
     }
+
+
+def effective_support_access_status(grant: PlatformTenantAccessGrant) -> str:
+    now = timezone.now()
+    if grant.revoked_at:
+        return PlatformTenantAccessGrant.Status.REVOKED
+    if grant.status in {PlatformTenantAccessGrant.Status.REQUESTED, PlatformTenantAccessGrant.Status.DENIED}:
+        return grant.status
+    if grant.expires_at <= now:
+        return PlatformTenantAccessGrant.Status.EXPIRED
+    if grant.starts_at and grant.starts_at > now:
+        return PlatformTenantAccessGrant.Status.APPROVED
+    return PlatformTenantAccessGrant.Status.ACTIVE
 
 
 def session_summary(session: SecuritySession) -> dict[str, Any]:

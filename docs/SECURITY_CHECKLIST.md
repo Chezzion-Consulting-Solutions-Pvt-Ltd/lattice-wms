@@ -14,7 +14,8 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Authentication | Login abuse protection | VERIFIED | Per-IP throttle, per-user lockout, recovery, success-clear tests |
 | Authentication | SSO/OIDC architecture | NOT IMPLEMENTED | Phase 9 |
 | MFA | TOTP and recovery codes | VERIFIED | Setup, verify, invalid code, encrypted secret, and single-use recovery tests |
-| Authorization | RBAC and granular permissions | PARTIAL | Role/permission models and helper tests |
+| Authorization | RBAC and granular permissions | VERIFIED | Role/permission models, tenant permission helpers, and explicit owner per-permission API tests pass |
+| Authorization | Owner lifecycle APIs | VERIFIED | Owner APIs require authenticated staff/owner principal plus matching active platform-role permission |
 | Authorization | Owner dashboard access | VERIFIED | Anonymous/non-owner denied; owner request allowed |
 | Authorization | Warehouse scope | PARTIAL | Assignment model and allow/deny tests |
 | Tenant Administration | Hierarchy CRUD | VERIFIED | Tenant DB-backed plant, warehouse, zone, storage type, section, bin API tests pass |
@@ -28,18 +29,18 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Tenant Isolation | Missing tenant mapping never falls back | VERIFIED | Resolver tests pass in Docker |
 | Database Security | One DB role per tenant | VERIFIED | Reciprocal Alpha/Beta PostgreSQL credential denial tests pass |
 | Encryption | TLS in production | PARTIAL | Settings and docs |
-| Secrets | Secret references, no plaintext tenant DB password columns | IMPLEMENTED | `TenantDatabase.secret_reference` |
+| Secrets | Secret references, no plaintext tenant DB password columns | VERIFIED | `TenantDatabase.secret_reference`; owner provisioning tests assert tenant DB passwords and admin invitation token hashes are not returned |
 | File Security | Upload controls | NOT IMPLEMENTED | Future phase |
 | Audit | Structured append-only audit | PARTIAL | Control audit model, owner mutation audits, identity security events, and owner audit browsing API |
 | Logging | Request IDs | PARTIAL | Middleware |
 | Monitoring | Health checks | VERIFIED | Compose healthchecks for backend, frontend, Celery, PostgreSQL, and Redis |
-| Backups | Tenant backup metadata | PARTIAL | `BackupPolicy` and `BackupRecord` control-plane metadata; local provider reports `NOT_CONFIGURED` |
-| DR | PITR/restore workflow | PARTIAL | `RestoreRequest` control-plane workflow exists; provider execution pending |
+| Backups | Tenant backup metadata | VERIFIED | `BackupPolicy` and `BackupRecord` control-plane metadata, fail-closed `NOT_CONFIGURED`, and `LOCAL_METADATA` drill execution tests pass |
+| DR | PITR/restore workflow | PARTIAL | `RestoreRequest` request/approval/execution workflow exists; local metadata execution is verified, production PITR adapter pending |
 | DevSecOps | CI security gates | PARTIAL | GitHub Actions scaffold |
 | Dependency Security | pip-audit/npm audit/Trivy | PARTIAL | CI placeholders |
 | Cloud/Network Security | Private DB/Redis design | VERIFIED | Compose publishes only backend/frontend ports; Postgres/Redis remain internal |
 | Data Residency | Region metadata | PARTIAL | Tenant model region |
 | Incident Response | Runbook | PARTIAL | Initial document |
-| Penetration Testing | Security test suite | VERIFIED | Docker-backed mandatory security suite with DB isolation enabled: 77 passed, 0 failed, 0 skipped |
+| Penetration Testing | Security test suite | VERIFIED | Docker-backed mandatory security suite with DB isolation enabled: 103 passed, 0 failed, 0 skipped |
 | Vendor Risk | Vendor security evidence request | IMPLEMENTED | `docs/VENDOR_SECURITY_EVIDENCE_REQUEST.md` covers checklist, SOC 2 Type II, privacy, ISO, VA/PT, LLM security, mobile PT, DR drill, and backup restore evidence |
 | Security Assessment | Current security measures assessment | IMPLEMENTED | `docs/SECURITY_MEASURES_ASSESSMENT.md` separates verified app controls from external evidence gaps |

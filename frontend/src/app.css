@@ -325,6 +325,14 @@
   padding-top: var(--lattice-space-2);
 }
 
+.owner-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(140px, 0.35fr));
+  gap: var(--lattice-space-3);
+  margin-bottom: var(--lattice-space-3);
+  align-items: end;
+}
+
 .owner-form-message {
   grid-column: 1 / -1;
   margin: 0;
@@ -538,9 +546,15 @@
 
   .owner-row-actions,
   .owner-detail-actions,
-  .owner-form-actions {
+  .owner-form-actions,
+  .owner-filter-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .owner-filter-bar {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .owner-panel__header,

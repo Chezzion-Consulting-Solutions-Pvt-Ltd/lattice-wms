@@ -1,9 +1,83 @@
 # Lattice Implementation Status
 
+## 2026-09-04
+
+### Implemented
+
+- Kept the Owner Console continuation inside the existing repository and reduced page bloat by extracting reusable owner route metadata, `OwnerResourceTable`, `OwnerCrudCard`, filter controls, pagination, detail table, and JSON/CSV helpers.
+- Added durable provisioning state to tenant database metadata: explicit provisioning steps and safe failure summaries.
+- Added control-plane `TenantConfiguration`, `TenantAdminInvitation`, and `TenantModuleHistory` models, plus tenant module override-state tracking.
+- Updated tenant provisioning to create default tenant configuration records, default module entitlement rows, tenant admin user/membership/role assignment, and hashed tenant admin invitations without returning invitation tokens or token hashes.
+- Added a failed-provisioning retry endpoint at `/api/v1/control/owner/tenants/<tenant_id>/provision/retry/`.
+- Added plan `price_metadata` and `currency` fields.
+- Promoted Plans from a generic table to a dedicated CRUD module at `/owner/plans` with create, read/detail, update, activate, deactivate, search, active/inactive filtering, sorting, pagination, backend validation, and audit.
+- Promoted Subscriptions from dashboard summary content to a dedicated CRUD module at `/owner/subscriptions` with create, read/detail, update, activate, suspend, cancel, expire API support, tenant/plan/status/renewal filters, sorting, pagination, backend validation, and audit.
+- Added explicit License issue/read/update APIs in addition to renew/revoke/reactivate lifecycle actions.
+- Added explicit Module read/detail and activate/deactivate lifecycle APIs, plus tenant module history records for owner overrides.
+- Added explicit Feature Flag active state, read/detail, activate/deactivate lifecycle APIs, and tenant override coverage.
+- Added backend tests for provisioning bootstrap/retry safety, Plans CRUD/lifecycle/validation/delete protection, Subscriptions CRUD/lifecycle/date/status validation, License issue/update/lifecycle, Modules CRUD/lifecycle/overrides, and Feature Flag CRUD/lifecycle/overrides.
+- Added explicit per-permission Owner API authorization across dashboard, tenants, domains, provisioning, plans, subscriptions, licenses, modules, feature flags, platform users, roles, permissions, support access, infrastructure, security, audit, reports, settings, and notifications.
+- Added owner authorization tests for tenant-only denial, staff users without matching platform permission, active platform-role allowance, inactive platform-role denial, and read-vs-manage permission separation.
+- Added identity-side `PlatformUserRole`, role active-state, and support-access lifecycle state/timestamps.
+- Added Platform User lifecycle APIs for activate, disable with last-admin protection, password-reset trigger, revoke-all-sessions, and persisted platform role assignment.
+- Added Role detail/lifecycle APIs with active/disabled state, default platform roles, and permission assignment.
+- Added Support Access requested/approved/active/denied/revoked/expired lifecycle APIs and update/detail support.
+- Added dedicated reusable frontend pages for Licenses, Modules, Feature Flags, Platform Users, Roles, Permissions, Support Access, and Reports using `OwnerLifecyclePage` or small read-only/report components.
+- Changed Owner report CSV export to use `export=csv` to avoid DRF's reserved `format` negotiation parameter, and added CSV formula-injection coverage.
+- Added a tenant detail related-resource API at `/api/v1/control/owner/tenants/<tenant_id>/related/` for route-level tabs covering domains, subscription, license, modules, feature flags, support access, backup policy/records, and restore requests without exposing tenant database secret fields.
+- Added migration orchestration through `/api/v1/control/owner/infrastructure/migrations/`, wrapping the trusted `migrate_tenant_databases` command, recording target tenant migration versions, auditing success/failure, and creating safe owner notifications on failure.
+- Added backup execution hooks through `/api/v1/control/owner/infrastructure/backups/`: unconfigured tenants fail closed with `NOT_CONFIGURED`, while the local `LOCAL_METADATA` provider records a truthful metadata-only restore point for validation/drill workflows.
+- Added restore approval/execution actions through `/api/v1/control/owner/infrastructure/restore/<restore_id>/<action>/`, including approval gating, safe failure state, audit, and local metadata-provider completion.
+- Updated local owner seeding so the local Owner Console account receives the `PLATFORM_ADMIN` platform role and permission set without storing or printing secrets.
+
+### Validation Executed
+
+- `docker compose exec backend python manage.py makemigrations control`: created `control.0006` and `control.0007`.
+- `docker compose exec backend python manage.py migrate`: applied `control.0006` and `control.0007`.
+- `docker compose exec backend python manage.py makemigrations --check`: passed with no changes detected.
+- `docker compose exec backend python manage.py check`: passed.
+- `docker compose exec backend pytest control/tests/test_owner_dashboard.py`: 20 passed.
+- `docker compose exec -e LATTICE_RUN_DB_ISOLATION=1 backend pytest`: 89 passed, 0 failed.
+- `frontend npm.cmd run build`: passed.
+- `frontend npm.cmd run lint`: passed with no warnings after moving helper exports.
+- `docker compose ps`: backend, frontend, Celery, PostgreSQL, and Redis healthy.
+- After access/report expansion: `docker compose exec backend pytest control/tests/test_owner_dashboard.py`: 25 passed.
+- After access/report expansion: `docker compose exec -e LATTICE_RUN_DB_ISOLATION=1 backend pytest`: 94 passed, 0 failed.
+- After access/report expansion: `frontend npm.cmd run build`: passed.
+- After access/report expansion: `frontend npm.cmd run lint`: passed.
+- After final owner gap-closure pass: `docker compose exec backend python manage.py migrate --noinput`: no migrations to apply.
+- After final owner gap-closure pass: `docker compose exec backend python manage.py makemigrations --check --dry-run`: passed with no changes detected.
+- After final owner gap-closure pass: `docker compose exec backend python manage.py check`: passed.
+- After final owner gap-closure pass: `docker compose exec backend pytest control/tests/test_owner_dashboard.py`: 34 passed, 0 failed.
+- After final owner gap-closure pass: `docker compose exec -e LATTICE_RUN_DB_ISOLATION=1 backend pytest`: 103 passed, 0 failed.
+- After final owner gap-closure pass: `frontend npm.cmd run build`: passed.
+- After final owner gap-closure pass: `frontend npm.cmd run lint`: passed.
+- After final owner gap-closure pass: `docker compose ps`: backend, frontend, Celery, PostgreSQL, and Redis healthy.
+- `docker compose exec backend python manage.py check --deploy`: exited successfully with expected local-development warnings for DEBUG, local secret strength, HSTS, HTTPS redirect, and secure cookies.
+
+### Known Limitations
+
+- Owner Console now has explicit per-permission Owner API enforcement, tenant-detail related-resource APIs, migration orchestration, and local backup/restore execution hooks. Production-grade DNS/HTTP domain verification, production backup provider adapters, and PITR-grade restore execution remain provider-specific follow-up work.
+- Production DNS/HTTP domain verification remains pending; local-development verification is implemented.
+- Backup/restore currently supports truthful `NOT_CONFIGURED` failure and `LOCAL_METADATA` drill execution; real object-store/PITR providers must be integrated before production restore claims.
+
 ## 2026-09-03
 
 ### Implemented
 
+- Audited the Owner Console against the completion gate and added an implementation gap matrix to `docs/OWNER_CONSOLE.md`.
+- Began Phase 1 Owner frontend refactor by extracting `OwnerShell` from the monolithic `OwnerConsole.tsx`.
+- Decoupled non-dashboard Owner pages from the dashboard preload so routes such as `/owner/licenses` can load their own API data without being blanked by a dashboard failure.
+- Added direct route handling for `/owner/tenants/<tenant_id>/` and `/owner/tenants/<tenant_id>/edit`.
+- Updated tenant table View actions to navigate to persisted tenant detail URLs.
+- Added backend tenant list search, pagination, sorting, status filter, region filter, plan filter, and database health filter.
+- Added server-side suspension reason validation and frontend reason capture for owner tenant lifecycle actions.
+- Added Owner tenant domain APIs for list, add, local-development verification, activate/deactivate, make-primary, and guarded removal.
+- Added Tenant Detail domain management UI backed by the owner domain APIs.
+- Added domain management tests confirming unverified/inactive domains do not resolve tenant login and active verified domains do.
+- Added a backend tenant provisioning endpoint that creates tenant, license, optional domain, trusted tenant database metadata, PostgreSQL tenant database, non-superuser runtime role, tenant migrations, READY health state, safe failure audit, and owner notification records.
+- Rewired the Owner Create Tenant UI to call the provisioning endpoint with a secret reference rather than creating metadata-only tenants.
+- Added provisioning success/failure tests with infrastructure execution mocked for unit-test safety.
 - Expanded the Owner Console control-plane data model with dedicated license records, module definitions, backup policy/record metadata, restore requests, platform settings, and owner notifications.
 - Added owner API modules under `control/api/` for commercial administration, modules/features, platform access, infrastructure, security/audit, reports, settings, and notifications.
 - Added clean `/api/v1/control/owner/` routes for plans, subscriptions, licenses, modules, feature flags, platform users, roles, permissions, support access, tenant databases, migrations, backups, restore, service health, security events, audit logs, sessions, MFA compliance, reports, settings, and notifications.
@@ -16,9 +90,19 @@
 
 - `.venv\Scripts\python.exe backend\manage.py check`: passed.
 - `.venv\Scripts\python.exe backend\manage.py makemigrations --check`: passed with no model changes pending; local Postgres credential check still warns.
+- `docker compose exec backend python manage.py migrate`: passed; no migrations pending after `control.0005`.
+- `docker compose exec backend python manage.py check`: passed.
+- `docker compose exec backend pytest control/tests/test_owner_dashboard.py`: 9 passed.
+- `docker compose exec -e LATTICE_RUN_DB_ISOLATION=1 backend pytest`: 78 passed, 0 failed.
+- After domain management: `docker compose exec backend pytest control/tests/test_owner_dashboard.py`: 10 passed.
+- After domain management: `docker compose exec -e LATTICE_RUN_DB_ISOLATION=1 backend pytest`: 79 passed, 0 failed.
+- After tenant provisioning: `docker compose exec backend pytest control/tests/test_owner_dashboard.py`: 12 passed.
+- After tenant provisioning: `docker compose exec -e LATTICE_RUN_DB_ISOLATION=1 backend pytest`: 81 passed, 0 failed.
+- After tenant provisioning: `frontend npm.cmd run build` and `frontend npm.cmd run lint`: passed.
+- `docker compose ps`: backend, frontend, Celery, PostgreSQL, and Redis healthy.
 - `frontend npm.cmd run build`: passed.
 - `frontend npm.cmd run lint`: passed.
-- Focused owner pytest was attempted but blocked before assertions because local PostgreSQL rejects `lattice_control_app` credentials.
+- Host venv focused pytest remains blocked because local PostgreSQL rejects `lattice_control_app` credentials; Docker-backed pytest is the authoritative local validation path.
 
 ### Known Limitations
 

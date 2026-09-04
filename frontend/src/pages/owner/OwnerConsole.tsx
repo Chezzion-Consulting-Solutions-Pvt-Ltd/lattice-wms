@@ -1,8 +1,21 @@
 import { CheckCircle2, Database, Eye, HardDrive, PauseCircle, Pencil, PlayCircle, Plus, RefreshCw, Server, ShieldAlert, Users } from 'lucide-react';
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
 import { apiFetch, LatticeApiError } from '../../api/client';
-import { AppShell, Badge, Button, Card, DataTable, Dialog, DialogClose, ErrorState, FormField, Input, LoadingState, PageHeader, StatCard, StatusBadge } from '../../design-system';
+import { Badge, Button, Card, DataTable, Dialog, DialogClose, ErrorState, FormField, Input, LoadingState, PageHeader, StatCard, StatusBadge } from '../../design-system';
 import type { CurrentUser } from '../../types';
+import { FeaturesPage } from './components/FeaturesPage';
+import { LicensesPage } from './components/LicensesPage';
+import { ModulesPage } from './components/ModulesPage';
+import { OwnerResourceTable } from './components/OwnerResourceTable';
+import { PermissionsPage } from './components/PermissionsPage';
+import { PlansPage } from './components/PlansPage';
+import { ReportsPage } from './components/ReportsPage';
+import { RolesPage } from './components/RolesPage';
+import { SubscriptionsPage } from './components/SubscriptionsPage';
+import { SupportAccessPage } from './components/SupportAccessPage';
+import { UsersPage } from './components/UsersPage';
+import { OwnerShell } from './layout/OwnerShell';
+import { dashboardBackedRoutes, ownerApiResources, ownerRouteMeta, type OwnerRoute } from './ownerRoutes';
 
 type Health = {
   status: string;
@@ -92,189 +105,14 @@ type LicenseAttention = {
   subscription_status: string;
 };
 
-type OwnerRoute =
-  | 'dashboard'
-  | 'tenants'
-  | 'tenants/new'
-  | 'plans'
-  | 'subscriptions'
-  | 'licenses'
-  | 'modules'
-  | 'features'
-  | 'users'
-  | 'roles'
-  | 'permissions'
-  | 'support-access'
-  | 'infrastructure/databases'
-  | 'infrastructure/migrations'
-  | 'infrastructure/backups'
-  | 'infrastructure/restore'
-  | 'infrastructure/health'
-  | 'security/events'
-  | 'security/audit'
-  | 'security/sessions'
-  | 'security/mfa'
-  | 'reports'
-  | 'settings'
-  | 'settings/security'
-  | 'settings/authentication'
-  | 'settings/provisioning'
-  | 'settings/notifications'
-  | 'settings/branding'
-  | 'profile'
-  | 'security-settings';
-
-const ownerRouteMeta: Record<OwnerRoute, { title: string; description: string; href: string }> = {
-  dashboard: {
-    title: 'Platform Dashboard',
-    description: 'SaaS platform health, tenant attention, and control-plane signals.',
-    href: '/owner/dashboard',
-  },
-  tenants: {
-    title: 'Tenants',
-    description: 'Tenant lifecycle, license, provisioning, database, and subscription status.',
-    href: '/owner/tenants',
-  },
-  'tenants/new': {
-    title: 'Create Tenant',
-    description: 'Provision new tenant control-plane records and database mappings.',
-    href: '/owner/tenants/new',
-  },
-  plans: {
-    title: 'Plans',
-    description: 'Commercial plan definitions, limits, modules, and support tiers.',
-    href: '/owner/plans',
-  },
-  subscriptions: {
-    title: 'Subscriptions',
-    description: 'Tenant subscription state, renewal posture, and plan assignments.',
-    href: '/owner/subscriptions',
-  },
-  licenses: {
-    title: 'Licenses',
-    description: 'Tenant license status, renewals, expiry, and revocation controls.',
-    href: '/owner/licenses',
-  },
-  modules: {
-    title: 'Modules',
-    description: 'Global WMS module definitions and activation state.',
-    href: '/owner/modules',
-  },
-  features: {
-    title: 'Feature Flags',
-    description: 'Global feature flags and tenant override state.',
-    href: '/owner/features',
-  },
-  users: {
-    title: 'Platform Users',
-    description: 'Platform users, MFA posture, and session counts.',
-    href: '/owner/users',
-  },
-  roles: {
-    title: 'Roles',
-    description: 'Platform roles and assigned permission codes.',
-    href: '/owner/roles',
-  },
-  permissions: {
-    title: 'Permissions',
-    description: 'Grouped platform permission registry.',
-    href: '/owner/permissions',
-  },
-  'support-access': {
-    title: 'Support Access',
-    description: 'Time-bounded owner-approved tenant support access grants.',
-    href: '/owner/support-access',
-  },
-  'infrastructure/databases': {
-    title: 'Tenant Databases',
-    description: 'Safe tenant database metadata, health, migration, and provisioning state.',
-    href: '/owner/infrastructure/databases',
-  },
-  'infrastructure/migrations': {
-    title: 'Migrations',
-    description: 'Tenant migration status and attention items.',
-    href: '/owner/infrastructure/migrations',
-  },
-  'infrastructure/backups': {
-    title: 'Backups',
-    description: 'Backup policies and provider status without fake backup success.',
-    href: '/owner/infrastructure/backups',
-  },
-  'infrastructure/restore': {
-    title: 'Restore Requests',
-    description: 'Controlled restore requests and provider-dependent execution state.',
-    href: '/owner/infrastructure/restore',
-  },
-  'infrastructure/health': {
-    title: 'Service Health',
-    description: 'Backend, PostgreSQL, Redis, Celery, and tenant database health checks.',
-    href: '/owner/infrastructure/health',
-  },
-  'security/events': {
-    title: 'Security Events',
-    description: 'Denied and failed control-plane events with safe request details.',
-    href: '/owner/security/events',
-  },
-  'security/audit': {
-    title: 'Audit Logs',
-    description: 'Append-only owner audit history and mutation records.',
-    href: '/owner/security/audit',
-  },
-  'security/sessions': {
-    title: 'Sessions',
-    description: 'Platform security sessions and revocation state.',
-    href: '/owner/security/sessions',
-  },
-  'security/mfa': {
-    title: 'MFA Compliance',
-    description: 'Privileged platform user MFA compliance posture.',
-    href: '/owner/security/mfa',
-  },
-  reports: {
-    title: 'Reports',
-    description: 'Control-plane operational reports and exported platform summaries.',
-    href: '/owner/reports',
-  },
-  settings: {
-    title: 'General Settings',
-    description: 'Platform display name, defaults, domain, and support metadata.',
-    href: '/owner/settings',
-  },
-  'settings/security': {
-    title: 'Security Settings',
-    description: 'Persisted platform security policy values.',
-    href: '/owner/settings/security',
-  },
-  'settings/authentication': {
-    title: 'Authentication Settings',
-    description: 'Password, MFA, session, and future federation policy metadata.',
-    href: '/owner/settings/authentication',
-  },
-  'settings/provisioning': {
-    title: 'Provisioning Settings',
-    description: 'Safe tenant provisioning defaults and migration policy metadata.',
-    href: '/owner/settings/provisioning',
-  },
-  'settings/notifications': {
-    title: 'Notification Settings',
-    description: 'Owner notification policy and unread operational alerts.',
-    href: '/owner/settings/notifications',
-  },
-  'settings/branding': {
-    title: 'Branding Settings',
-    description: 'Safe Lattice branding metadata without arbitrary CSS or JavaScript.',
-    href: '/owner/settings/branding',
-  },
-  profile: {
-    title: 'Profile',
-    description: 'Signed-in platform account, role posture, and console access.',
-    href: '/owner/profile',
-  },
-  'security-settings': {
-    title: 'Security Settings',
-    description: 'MFA posture, secure session behavior, and account protections.',
-    href: '/owner/security-settings',
-  },
+type TenantDomainRecord = {
+  id: string;
+  hostname: string;
+  is_primary: boolean;
+  verified: boolean;
+  is_active: boolean;
+  verification_method: string;
+  verified_at: string | null;
 };
 
 export function OwnerConsole({
@@ -287,6 +125,8 @@ export function OwnerConsole({
   onLogout: () => void;
 }) {
   const activeRoute = useOwnerRoute();
+  const routeMeta = ownerRouteMeta[activeRoute];
+  const needsDashboard = dashboardBackedRoutes.has(activeRoute);
   const [health, setHealth] = useState<string>('checking');
   const [dashboard, setDashboard] = useState<OwnerDashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -317,12 +157,13 @@ export function OwnerConsole({
   }, [onAuthorizationLost]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (needsDashboard) {
+      refresh();
+    }
+  }, [needsDashboard, refresh]);
 
   const profileName = getDisplayName(user);
   const profileLabel = getInitials(user);
-  const routeMeta = ownerRouteMeta[activeRoute];
   const data = dashboard;
 
   useEffect(() => {
@@ -330,9 +171,27 @@ export function OwnerConsole({
     return () => window.cancelAnimationFrame(animationFrame);
   }, [activeRoute, data?.generated_at]);
 
+  if (!needsDashboard) {
+    return (
+      <OwnerShell
+        user={user}
+        profileLabel={profileLabel}
+        profileName={profileName}
+        activeHref={routeMeta.href}
+        onLogout={onLogout}
+      >
+        <PageHeader
+          title={routeMeta.title}
+          description={routeMeta.description}
+        />
+        <OwnerSectionPage route={activeRoute} data={data} health={health} onTenantMutated={refresh} selectedTenant={null} tenantRows={[]} user={user} />
+      </OwnerShell>
+    );
+  }
+
   if (!data) {
     return (
-      <OwnerPageShell
+      <OwnerShell
         user={user}
         profileLabel={profileLabel}
         profileName={profileName}
@@ -350,19 +209,31 @@ export function OwnerConsole({
         />
         {loading ? <LoadingState title="Loading owner console" /> : null}
         {error ? <ErrorState title={error} /> : null}
-      </OwnerPageShell>
+      </OwnerShell>
     );
   }
 
   const tenantDbIssues = Math.max(data.summary.total_tenants - data.summary.ready_databases, 0);
   const backupIssues = data.summary.backup_warnings;
   const migrationIssues = data.summary.migration_warnings;
-  const selectedTenant = data.tenant_health.find((tenant) => tenant.id === selectedTenantId) ?? data.tenant_health[0] ?? null;
+  const routeTenantId = getOwnerTenantIdFromLocation();
+  const selectedTenant = data.tenant_health.find((tenant) => tenant.id === (routeTenantId || selectedTenantId)) ?? data.tenant_health[0] ?? null;
   const changeTenantStatus = async (tenant: TenantRecord, action: 'activate' | 'suspend') => {
+    const reason = window.prompt(action === 'suspend' ? `Reason for suspending ${tenant.display_name}` : `Reason for activating ${tenant.display_name}`);
+    if (reason === null) {
+      return;
+    }
+    if (action === 'suspend' && !reason.trim()) {
+      setError('A suspension reason is required.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      await apiFetch(`/api/v1/control/owner/tenants/${tenant.id}/${action}/`, { method: 'POST' });
+      await apiFetch(`/api/v1/control/owner/tenants/${tenant.id}/${action}/`, {
+        body: JSON.stringify({ reason: reason.trim() }),
+        method: 'POST',
+      });
       await refresh();
     } catch (caught) {
       if (caught instanceof LatticeApiError) {
@@ -376,7 +247,11 @@ export function OwnerConsole({
   };
   const tenantRows = buildTenantRows(data, {
     onActivate: (tenant) => changeTenantStatus(tenant, 'activate'),
-    onSelect: (tenant) => setSelectedTenantId(tenant.id),
+    onSelect: (tenant) => {
+      setSelectedTenantId(tenant.id);
+      window.history.pushState(null, '', `/owner/tenants/${tenant.id}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    },
     onSuspend: (tenant) => changeTenantStatus(tenant, 'suspend'),
   });
   const refreshAfterMutation = async () => {
@@ -385,7 +260,7 @@ export function OwnerConsole({
   };
 
   return (
-    <OwnerPageShell
+    <OwnerShell
       user={user}
       profileLabel={profileLabel}
       profileName={profileName}
@@ -413,37 +288,7 @@ export function OwnerConsole({
       ) : (
         <OwnerSectionPage route={activeRoute} data={data} health={health} onTenantMutated={refreshAfterMutation} selectedTenant={selectedTenant} tenantRows={tenantRows} user={user} />
       )}
-    </OwnerPageShell>
-  );
-}
-
-function OwnerPageShell({
-  activeHref,
-  children,
-  onLogout,
-  profileLabel,
-  profileName,
-  user,
-}: {
-  activeHref: string;
-  children: ReactNode;
-  onLogout: () => void;
-  profileLabel: string;
-  profileName: string;
-  user: CurrentUser;
-}) {
-  return (
-    <AppShell
-      title="Owner Console"
-      mode="owner"
-      profileLabel={profileLabel}
-      profileName={profileName}
-      profileDescription={user.is_platform_admin ? 'Platform Admin' : 'Owner Console'}
-      activeHref={activeHref}
-      onLogout={onLogout}
-    >
-      {children}
-    </AppShell>
+    </OwnerShell>
   );
 }
 
@@ -538,7 +383,7 @@ function OwnerSectionPage({
   user,
 }: {
   route: OwnerRoute;
-  data: OwnerDashboard;
+  data: OwnerDashboard | null;
   health: string;
   onTenantMutated: () => Promise<void>;
   selectedTenant: TenantRecord | null;
@@ -553,6 +398,11 @@ function OwnerSectionPage({
     return <SecuritySettingsPage user={user} mode="owner" />;
   }
 
+  if (!data && dashboardBackedRoutes.has(route)) {
+    return <ErrorState title="Owner dashboard data is unavailable." />;
+  }
+  const dashboardData = data as OwnerDashboard;
+
   if (route === 'tenants') {
     return (
       <section className="owner-page-grid owner-page-grid--management">
@@ -566,33 +416,43 @@ function OwnerSectionPage({
     );
   }
 
+  if (route === 'tenant-detail' || route === 'tenant-edit') {
+    return (
+      <section className="owner-page-grid">
+        <Card title={route === 'tenant-edit' ? 'Edit Tenant' : 'Tenant Detail'} variant="glass">
+          {selectedTenant ? <TenantDetail tenant={selectedTenant} onUpdated={onTenantMutated} /> : <p className="owner-page-note">Tenant record was not found.</p>}
+        </Card>
+      </section>
+    );
+  }
+
   if (route === 'infrastructure/health') {
-    const tenantDbIssues = Math.max(data.summary.total_tenants - data.summary.ready_databases, 0);
+    const tenantDbIssues = Math.max(dashboardData.summary.total_tenants - dashboardData.summary.ready_databases, 0);
     return (
       <section className="owner-page-grid">
         <Card title="Service Health" variant="glass">
           <div className="owner-status-stack">
-            <StatusLine label="Backend" status={data.platform_health.backend?.status ?? (health === 'ok' ? 'OK' : 'CHECKING')} />
-            <StatusLine label="PostgreSQL" status={data.platform_health.postgresql?.status ?? 'UNKNOWN'} />
-            <StatusLine label="Redis" status={data.platform_health.redis?.status ?? 'UNKNOWN'} />
-            <StatusLine label="Celery" status={data.platform_health.celery?.status ?? 'UNKNOWN'} />
+            <StatusLine label="Backend" status={dashboardData.platform_health.backend?.status ?? (health === 'ok' ? 'OK' : 'CHECKING')} />
+            <StatusLine label="PostgreSQL" status={dashboardData.platform_health.postgresql?.status ?? 'UNKNOWN'} />
+            <StatusLine label="Redis" status={dashboardData.platform_health.redis?.status ?? 'UNKNOWN'} />
+            <StatusLine label="Celery" status={dashboardData.platform_health.celery?.status ?? 'UNKNOWN'} />
             <StatusLine label="Tenant databases" status={tenantDbIssues ? 'WARNING' : 'HEALTHY'} />
           </div>
         </Card>
         <Card title="Database Estate" variant="glass">
           <div className="owner-status-stack">
-            <StatusLine label="Ready databases" status={`${data.summary.ready_databases}/${data.summary.total_tenants}`} />
-            <StatusLine label="Healthy databases" status={`${data.summary.healthy_databases}/${data.summary.total_tenants}`} />
-            <StatusLine label="Database warnings" status={String(data.summary.database_warnings)} />
-            <StatusLine label="Storage usage" status={data.infrastructure.storage_usage} />
+            <StatusLine label="Ready databases" status={`${dashboardData.summary.ready_databases}/${dashboardData.summary.total_tenants}`} />
+            <StatusLine label="Healthy databases" status={`${dashboardData.summary.healthy_databases}/${dashboardData.summary.total_tenants}`} />
+            <StatusLine label="Database warnings" status={String(dashboardData.summary.database_warnings)} />
+            <StatusLine label="Storage usage" status={dashboardData.infrastructure.storage_usage} />
           </div>
         </Card>
         <Card title="Migrations & Backup" variant="glass">
           <div className="owner-status-stack">
-            <StatusLine label="Migration status" status={data.infrastructure.migration_status} />
-            <StatusLine label="Migration warnings" status={String(data.summary.migration_warnings)} />
-            <StatusLine label="Backup status" status={data.infrastructure.backup_status} />
-            <StatusLine label="Backup warnings" status={String(data.summary.backup_warnings ?? 0)} />
+            <StatusLine label="Migration status" status={dashboardData.infrastructure.migration_status} />
+            <StatusLine label="Migration warnings" status={String(dashboardData.summary.migration_warnings)} />
+            <StatusLine label="Backup status" status={dashboardData.infrastructure.backup_status} />
+            <StatusLine label="Backup warnings" status={String(dashboardData.summary.backup_warnings ?? 0)} />
           </div>
         </Card>
       </section>
@@ -604,42 +464,12 @@ function OwnerSectionPage({
       <section className="owner-page-grid">
         <Card title="Security Events" variant="glass">
           <div className="owner-status-stack">
-            <StatusLine label="Alerts" status={String(data.summary.security_alerts)} />
-            <StatusLine label="Active support grants" status={String(data.summary.active_support_grants)} />
+            <StatusLine label="Alerts" status={String(dashboardData.summary.security_alerts)} />
+            <StatusLine label="Active support grants" status={String(dashboardData.summary.active_support_grants)} />
           </div>
         </Card>
         <Card title="Recent Events" variant="glass">
-          <RecentSecurityEvents events={data.recent_security_events} limit={6} />
-        </Card>
-      </section>
-    );
-  }
-
-  if (route === 'subscriptions') {
-    return (
-      <section className="owner-page-grid">
-        <Card title="License Summary" variant="glass">
-          <div className="owner-status-stack">
-            <StatusLine label="Licenses issued" status={String(data.summary.license_count)} />
-            <StatusLine label="Subscription attention" status={String(data.subscription_license_attention.length)} />
-            <StatusLine label="Active tenants" status={String(data.summary.active_tenants)} />
-            <StatusLine label="Suspended tenants" status={String(data.summary.suspended_tenants)} />
-          </div>
-        </Card>
-        <Card title="Attention" variant="glass">
-          <DataTable
-            columns={[
-              { key: 'tenant', header: 'Tenant' },
-              { key: 'license', header: 'License' },
-              { key: 'status', header: 'Status' },
-            ]}
-            rows={data.subscription_license_attention.map((item) => ({
-              tenant: item.tenant,
-              license: item.license_number,
-              status: <StatusBadge status={item.subscription_status} variant={variantForStatus(item.subscription_status)} />,
-            }))}
-            emptyMessage="No subscription attention items."
-          />
+          <RecentSecurityEvents events={dashboardData.recent_security_events} limit={6} />
         </Card>
       </section>
     );
@@ -650,39 +480,54 @@ function OwnerSectionPage({
       <section className="owner-page-grid">
         <Card title="Tenant Provisioning" variant="glass">
           <CreateTenantDialog onCreated={onTenantMutated} />
-          <p className="owner-page-note">Tenant creation persists control-plane metadata today. Dedicated database provisioning remains a controlled backend workflow and is never selected from browser-supplied database names.</p>
+          <p className="owner-page-note">Provisioning is executed by the backend from trusted control-plane inputs. The browser submits a secret reference only, never a database password or connection string.</p>
         </Card>
       </section>
     );
   }
 
+  if (route === 'plans') {
+    return <PlansPage />;
+  }
+
+  if (route === 'subscriptions') {
+    return <SubscriptionsPage />;
+  }
+
+  if (route === 'licenses') {
+    return <LicensesPage />;
+  }
+
+  if (route === 'modules') {
+    return <ModulesPage />;
+  }
+
+  if (route === 'features') {
+    return <FeaturesPage />;
+  }
+
+  if (route === 'users') {
+    return <UsersPage />;
+  }
+
+  if (route === 'roles') {
+    return <RolesPage />;
+  }
+
+  if (route === 'permissions') {
+    return <PermissionsPage />;
+  }
+
+  if (route === 'support-access') {
+    return <SupportAccessPage />;
+  }
+
+  if (route === 'reports') {
+    return <ReportsPage />;
+  }
+
   return <OwnerApiResourcePage route={route} />;
 }
-
-const ownerApiResources: Partial<Record<OwnerRoute, { endpoint: string; collection: string; title: string }>> = {
-  plans: { endpoint: '/api/v1/control/owner/plans/', collection: 'plans', title: 'Plans' },
-  licenses: { endpoint: '/api/v1/control/owner/licenses/', collection: 'licenses', title: 'Licenses' },
-  modules: { endpoint: '/api/v1/control/owner/modules/', collection: 'modules', title: 'Modules' },
-  features: { endpoint: '/api/v1/control/owner/features/', collection: 'features', title: 'Feature Flags' },
-  users: { endpoint: '/api/v1/control/owner/users/', collection: 'users', title: 'Platform Users' },
-  roles: { endpoint: '/api/v1/control/owner/roles/', collection: 'roles', title: 'Roles' },
-  permissions: { endpoint: '/api/v1/control/owner/permissions/', collection: 'permissions', title: 'Permissions' },
-  'support-access': { endpoint: '/api/v1/control/owner/support-access/', collection: 'support_access', title: 'Support Access' },
-  'infrastructure/databases': { endpoint: '/api/v1/control/owner/infrastructure/databases/', collection: 'databases', title: 'Tenant Databases' },
-  'infrastructure/migrations': { endpoint: '/api/v1/control/owner/infrastructure/migrations/', collection: 'migrations', title: 'Migrations' },
-  'infrastructure/backups': { endpoint: '/api/v1/control/owner/infrastructure/backups/', collection: 'backups', title: 'Backups' },
-  'infrastructure/restore': { endpoint: '/api/v1/control/owner/infrastructure/restore/', collection: 'restore_requests', title: 'Restore Requests' },
-  'security/audit': { endpoint: '/api/v1/control/owner/security/audit/', collection: 'audit_logs', title: 'Audit Logs' },
-  'security/sessions': { endpoint: '/api/v1/control/owner/security/sessions/', collection: 'sessions', title: 'Sessions' },
-  'security/mfa': { endpoint: '/api/v1/control/owner/security/mfa/', collection: 'mfa_compliance', title: 'MFA Compliance' },
-  reports: { endpoint: '/api/v1/control/owner/reports/', collection: 'rows', title: 'Owner Reports' },
-  settings: { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'General Settings' },
-  'settings/security': { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'Security Settings' },
-  'settings/authentication': { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'Authentication Settings' },
-  'settings/provisioning': { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'Provisioning Settings' },
-  'settings/notifications': { endpoint: '/api/v1/control/owner/notifications/', collection: 'notifications', title: 'Notifications' },
-  'settings/branding': { endpoint: '/api/v1/control/owner/settings/', collection: 'settings', title: 'Branding Settings' },
-};
 
 function OwnerApiResourcePage({ route }: { route: OwnerRoute }) {
   const resource = ownerApiResources[route];
@@ -718,8 +563,6 @@ function OwnerApiResourcePage({ route }: { route: OwnerRoute }) {
   }
 
   const records = Array.isArray(payload?.[resource.collection]) ? payload[resource.collection] as Array<Record<string, unknown>> : [];
-  const rows = records.map(toTableRow);
-  const columns = buildColumns(rows);
 
   return (
     <section className="owner-page-grid">
@@ -727,13 +570,7 @@ function OwnerApiResourcePage({ route }: { route: OwnerRoute }) {
         {loading ? <LoadingState title={`Loading ${resource.title.toLowerCase()}`} /> : null}
         {error ? <ErrorState title={error} /> : null}
         {!loading && !error ? (
-          <DataTable
-            searchable
-            pagination
-            columns={columns.length ? columns : [{ key: 'status', header: 'Status' }]}
-            rows={rows.length ? rows : [{ status: 'No records found.' }]}
-            emptyMessage="No records found."
-          />
+          <OwnerResourceTable records={records} />
         ) : null}
         <div className="owner-form-actions">
           <Button variant="secondary" icon={<RefreshCw size={16} />} onClick={load}>
@@ -743,34 +580,6 @@ function OwnerApiResourcePage({ route }: { route: OwnerRoute }) {
       </Card>
     </section>
   );
-}
-
-function toTableRow(record: Record<string, unknown>): Record<string, ReactNode> {
-  const entries = Object.entries(record).slice(0, 8);
-  return Object.fromEntries(entries.map(([key, value]) => [key, renderCellValue(value)]));
-}
-
-function buildColumns(rows: Array<Record<string, ReactNode>>) {
-  const keys = rows[0] ? Object.keys(rows[0]) : [];
-  return keys.map((key) => ({ key, header: titleize(key) }));
-}
-
-function renderCellValue(value: unknown): ReactNode {
-  if (value === null || value === undefined || value === '') {
-    return 'UNASSIGNED';
-  }
-  if (typeof value === 'boolean') {
-    return <StatusBadge status={value ? 'YES' : 'NO'} variant={value ? 'success' : 'warning'} />;
-  }
-  if (typeof value === 'object') {
-    return JSON.stringify(value);
-  }
-  const text = String(value);
-  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
-}
-
-function titleize(value: string) {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function ProfilePage({ user, mode }: { user: CurrentUser; mode: 'owner' | 'tenant' }) {
@@ -859,9 +668,11 @@ function CreateTenantDialog({ onCreated }: { onCreated: () => Promise<void> }) {
     tenant_code: '',
     display_name: '',
     legal_name: '',
+    domain: '',
     region: 'us-east-1',
     timezone: 'UTC',
     subscription_plan: '',
+    secret_reference: '',
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -875,7 +686,7 @@ function CreateTenantDialog({ onCreated }: { onCreated: () => Promise<void> }) {
     setSaving(true);
     setMessage('');
     try {
-      await apiFetch('/api/v1/control/owner/tenants/', {
+      await apiFetch('/api/v1/control/owner/tenants/provision/', {
         body: JSON.stringify(form),
         method: 'POST',
       });
@@ -883,11 +694,13 @@ function CreateTenantDialog({ onCreated }: { onCreated: () => Promise<void> }) {
         tenant_code: '',
         display_name: '',
         legal_name: '',
+        domain: '',
         region: 'us-east-1',
         timezone: 'UTC',
         subscription_plan: '',
+        secret_reference: '',
       });
-      setMessage('Tenant created. Database provisioning remains backend-controlled.');
+      setMessage('Tenant provisioned successfully.');
       await onCreated();
     } catch (caught) {
       if (caught instanceof LatticeApiError) {
@@ -903,7 +716,7 @@ function CreateTenantDialog({ onCreated }: { onCreated: () => Promise<void> }) {
   return (
     <Dialog
       title="Create Tenant"
-      description="Creates control-plane tenant metadata. Tenant database provisioning remains a backend-controlled workflow."
+      description="Creates the tenant record, license, trusted database mapping, local domain metadata, tenant database, runtime role, and tenant migrations through the backend provisioning workflow."
       trigger={
         <Button icon={<Plus size={16} />}>
           Create Tenant
@@ -920,6 +733,9 @@ function CreateTenantDialog({ onCreated }: { onCreated: () => Promise<void> }) {
         <FormField label="Legal name">
           <Input value={form.legal_name} onChange={(event) => updateForm('legal_name', event.target.value)} />
         </FormField>
+        <FormField label="Domain">
+          <Input value={form.domain} onChange={(event) => updateForm('domain', event.target.value)} placeholder="tenant.localhost" />
+        </FormField>
         <FormField label="Region">
           <Input value={form.region} onChange={(event) => updateForm('region', event.target.value)} />
         </FormField>
@@ -928,6 +744,9 @@ function CreateTenantDialog({ onCreated }: { onCreated: () => Promise<void> }) {
         </FormField>
         <FormField label="Subscription plan">
           <Input value={form.subscription_plan} onChange={(event) => updateForm('subscription_plan', event.target.value)} />
+        </FormField>
+        <FormField label="Secret reference">
+          <Input required value={form.secret_reference} onChange={(event) => updateForm('secret_reference', event.target.value)} placeholder="env:TENANT_CODE_DB_PASSWORD" />
         </FormField>
         {message ? <p className="owner-form-message">{message}</p> : null}
         <div className="owner-form-actions">
@@ -1062,6 +881,97 @@ function TenantDetail({ tenant, onUpdated }: { tenant: TenantRecord; onUpdated: 
       <StatusLine label="Runtime role" status={tenant.database?.runtime_role || 'UNASSIGNED'} />
       <StatusLine label="DB health" status={tenant.database?.health_status ?? 'MISSING'} />
       <StatusLine label="Migration" status={tenant.database?.migration_version || 'NOT RECORDED'} />
+      <TenantDomains tenant={tenant} />
+    </div>
+  );
+}
+
+function TenantDomains({ tenant }: { tenant: TenantRecord }) {
+  const [domains, setDomains] = useState<TenantDomainRecord[]>([]);
+  const [hostname, setHostname] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+
+  const loadDomains = useCallback(async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const payload = await apiFetch<{ domains: TenantDomainRecord[] }>(`/api/v1/control/owner/tenants/${tenant.id}/domains/`);
+      setDomains(payload.domains);
+    } catch (caught) {
+      setMessage(caught instanceof LatticeApiError ? caught.message : 'Unable to load domains.');
+    } finally {
+      setLoading(false);
+    }
+  }, [tenant.id]);
+
+  useEffect(() => {
+    loadDomains();
+  }, [loadDomains]);
+
+  const addDomain = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage('');
+    try {
+      await apiFetch(`/api/v1/control/owner/tenants/${tenant.id}/domains/`, {
+        body: JSON.stringify({ hostname, verification_method: 'LOCAL_DEVELOPMENT' }),
+        method: 'POST',
+      });
+      setHostname('');
+      await loadDomains();
+    } catch (caught) {
+      setMessage(caught instanceof LatticeApiError ? caught.message : 'Unable to add domain.');
+    }
+  };
+
+  const runDomainAction = async (domain: TenantDomainRecord, action: 'verify-development' | 'activate' | 'deactivate' | 'make-primary') => {
+    setMessage('');
+    try {
+      await apiFetch(`/api/v1/control/owner/tenants/${tenant.id}/domains/${domain.id}/${action}/`, { method: 'POST' });
+      await loadDomains();
+    } catch (caught) {
+      setMessage(caught instanceof LatticeApiError ? caught.message : 'Unable to update domain.');
+    }
+  };
+
+  return (
+    <div className="owner-detail-stack">
+      <h3>Domains</h3>
+      <form className="owner-form-grid" onSubmit={addDomain}>
+        <FormField label="Development domain">
+          <Input required value={hostname} onChange={(event) => setHostname(event.target.value)} placeholder="tenant.localhost" />
+        </FormField>
+        <Button type="submit" icon={<Plus size={16} />}>Add Domain</Button>
+      </form>
+      {loading ? <LoadingState title="Loading domains" /> : null}
+      {message ? <p className="owner-form-message">{message}</p> : null}
+      <DataTable
+        columns={[
+          { key: 'hostname', header: 'Domain' },
+          { key: 'verified', header: 'Verified' },
+          { key: 'active', header: 'Active' },
+          { key: 'primary', header: 'Primary' },
+          { key: 'actions', header: 'Actions' },
+        ]}
+        rows={domains.map((domain) => ({
+          hostname: domain.hostname,
+          verified: <StatusBadge status={domain.verified ? 'VERIFIED' : 'UNVERIFIED'} variant={domain.verified ? 'success' : 'warning'} />,
+          active: <StatusBadge status={domain.is_active ? 'ACTIVE' : 'INACTIVE'} variant={domain.is_active ? 'success' : 'warning'} />,
+          primary: <StatusBadge status={domain.is_primary ? 'PRIMARY' : 'SECONDARY'} variant={domain.is_primary ? 'success' : 'info'} />,
+          actions: (
+            <div className="owner-row-actions">
+              {!domain.verified ? <Button variant="secondary" onClick={() => runDomainAction(domain, 'verify-development')}>Verify</Button> : null}
+              {domain.is_active ? (
+                <Button variant="secondary" onClick={() => runDomainAction(domain, 'deactivate')}>Deactivate</Button>
+              ) : (
+                <Button variant="secondary" onClick={() => runDomainAction(domain, 'activate')}>Activate</Button>
+              )}
+              {!domain.is_primary ? <Button variant="secondary" onClick={() => runDomainAction(domain, 'make-primary')}>Make Primary</Button> : null}
+            </div>
+          ),
+        }))}
+        emptyMessage="No tenant domains registered."
+      />
     </div>
   );
 }
@@ -1259,7 +1169,7 @@ function buildTenantRows(
           </Button>
         ) : (
           <Button icon={<PlayCircle size={15} />} onClick={() => actions.onActivate(tenant)}>
-            Activate
+            {tenant.status === 'SUSPENDED' ? 'Reactivate' : 'Activate'}
           </Button>
         )}
       </div>
@@ -1306,6 +1216,12 @@ function scrollConsoleToTop() {
 function getOwnerRouteFromLocation(): OwnerRoute {
   const hashRoute = window.location.hash.replace('#', '');
   const pathRoute = window.location.pathname.replace(/^\/owner\/?/, '').replace(/\/$/, '');
+  if (/^tenants\/[0-9a-fA-F-]{36}\/edit$/.test(pathRoute)) {
+    return 'tenant-edit';
+  }
+  if (/^tenants\/[0-9a-fA-F-]{36}$/.test(pathRoute)) {
+    return 'tenant-detail';
+  }
   const candidate = (pathRoute || hashRoute || 'dashboard') as OwnerRoute;
   const route = candidate in ownerRouteMeta ? candidate : 'dashboard';
   if (window.location.hash && route in ownerRouteMeta) {
@@ -1315,6 +1231,11 @@ function getOwnerRouteFromLocation(): OwnerRoute {
     window.history.replaceState(null, '', ownerRouteMeta.dashboard.href);
   }
   return route;
+}
+
+function getOwnerTenantIdFromLocation() {
+  const match = window.location.pathname.match(/^\/owner\/tenants\/([0-9a-fA-F-]{36})(?:\/edit)?\/?$/);
+  return match?.[1] ?? '';
 }
 
 function variantForStatus(status: string) {

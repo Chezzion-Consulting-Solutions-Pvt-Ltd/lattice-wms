@@ -29,14 +29,20 @@ Completed hardening in this milestone:
 - Docker healthchecks for backend, frontend, Celery, PostgreSQL, and Redis.
 - Non-root backend/Celery container runtime.
 
+Completed in the Owner Console gap-closure pass:
+
+- Advanced tenant list API filters, tenant related-resource tabs, tenant domain management, and end-to-end provisioning orchestration.
+- Platform role assignment UI, custom-role lifecycle, explicit per-permission Owner API enforcement, and missing-permission denial tests.
+- Migration orchestration through the trusted tenant migration command with safe success/failure audit.
+- Backup and restore execution hooks with fail-closed unconfigured state and verified `LOCAL_METADATA` drill provider.
+- Comprehensive Docker-backed Owner Console tests and full backend validation: 103 passed with DB isolation enabled.
+
 Still in progress for Owner Console + Platform IAM:
 
-- Full page split from the large `OwnerConsole.tsx`.
-- Advanced tenant list filters, tenant detail tabs, tenant domain management, and end-to-end provisioning orchestration.
-- Platform role assignment UI and complete custom-role lifecycle.
-- Migration orchestration, backup provider execution, and restore execution.
-- Confirmation dialogs for every sensitive owner mutation.
-- Comprehensive Owner Console tests and Docker-backed validation after local PostgreSQL credentials are repaired.
+- Full UI page split from the remaining large legacy sections in `OwnerConsole.tsx`.
+- Production DNS/HTTP domain verification provider.
+- Production object-store/PITR backup and restore adapters.
+- Confirmation dialogs for any remaining sensitive owner mutation surfaces not yet routed through shared lifecycle components.
 
 Completed in the tenant/client authentication foundation:
 

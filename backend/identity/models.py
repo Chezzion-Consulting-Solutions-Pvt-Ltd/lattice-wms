@@ -32,6 +32,7 @@ class Role(TimeStampedModel):
     code = models.CharField(max_length=80, unique=True)
     name = models.CharField(max_length=120)
     scope = models.CharField(max_length=24, choices=Scope.choices)
+    is_active = models.BooleanField(default=True)
     requires_mfa = models.BooleanField(default=False)
     permissions = models.ManyToManyField(Permission, through="RolePermission", related_name="roles")
 
@@ -55,6 +56,14 @@ class MembershipRole(TimeStampedModel):
         unique_together = [("membership", "role")]
 
 
+class PlatformUserRole(TimeStampedModel):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="platform_role_assignments")
+    role = models.ForeignKey(Role, on_delete=models.PROTECT)
+
+    class Meta:
+        unique_together = [("user", "role")]
+
+
 class WarehouseAssignment(TimeStampedModel):
     membership = models.ForeignKey("control.TenantMembership", on_delete=models.CASCADE, related_name="warehouse_assignments")
     warehouse_code = models.CharField(max_length=40)
@@ -65,14 +74,29 @@ class WarehouseAssignment(TimeStampedModel):
 
 
 class PlatformTenantAccessGrant(TimeStampedModel):
+    class Status(models.TextChoices):
+        REQUESTED = "REQUESTED", "Requested"
+        APPROVED = "APPROVED", "Approved"
+        ACTIVE = "ACTIVE", "Active"
+        EXPIRED = "EXPIRED", "Expired"
+        DENIED = "DENIED", "Denied"
+        REVOKED = "REVOKED", "Revoked"
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="platform_tenant_access_grants")
     tenant = models.ForeignKey("control.Tenant", on_delete=models.CASCADE, related_name="platform_access_grants")
     approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="approved_platform_tenant_access_grants",
+        null=True,
+        blank=True,
     )
     reason = models.CharField(max_length=240)
+    scope = models.CharField(max_length=80, default="tenant")
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.ACTIVE)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    denied_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField()
     revoked_at = models.DateTimeField(null=True, blank=True)
 

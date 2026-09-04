@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import secrets
 import uuid
 
 from django.conf import settings
@@ -101,6 +103,18 @@ class TenantDatabase(TimeStampedModel):
         DEGRADED = "DEGRADED", "Degraded"
         UNAVAILABLE = "UNAVAILABLE", "Unavailable"
 
+    class ProvisioningStep(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        DATABASE_CREATING = "DATABASE_CREATING", "Database creating"
+        DATABASE_CREATED = "DATABASE_CREATED", "Database created"
+        ROLE_CREATED = "ROLE_CREATED", "Role created"
+        MIGRATING = "MIGRATING", "Migrating"
+        CONFIGURING = "CONFIGURING", "Configuring"
+        ADMIN_INVITING = "ADMIN_INVITING", "Admin inviting"
+        HEALTH_CHECKING = "HEALTH_CHECKING", "Health checking"
+        READY = "READY", "Ready"
+        FAILED = "FAILED", "Failed"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.OneToOneField(Tenant, on_delete=models.PROTECT, related_name="database")
     database_alias = models.SlugField(max_length=80, unique=True)
@@ -112,8 +126,55 @@ class TenantDatabase(TimeStampedModel):
     sslmode = models.CharField(max_length=20, default="require")
     migration_version = models.CharField(max_length=80, blank=True)
     provisioning_status = models.CharField(max_length=32, choices=ProvisioningStatus.choices, default=ProvisioningStatus.PENDING)
+    provisioning_step = models.CharField(max_length=40, choices=ProvisioningStep.choices, default=ProvisioningStep.PENDING)
+    safe_error_summary = models.CharField(max_length=240, blank=True)
     health_status = models.CharField(max_length=32, choices=HealthStatus.choices, default=HealthStatus.UNKNOWN)
     last_health_check = models.DateTimeField(null=True, blank=True)
+
+
+class TenantConfiguration(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        READY = "READY", "Ready"
+        FAILED = "FAILED", "Failed"
+
+    tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name="configuration")
+    timezone = models.CharField(max_length=64, default="UTC")
+    language = models.CharField(max_length=16, default="en")
+    enabled_module_defaults = models.JSONField(default=list, blank=True)
+    security_policy = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.PENDING)
+
+
+class TenantAdminInvitation(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        REVOKED = "REVOKED", "Revoked"
+        EXPIRED = "EXPIRED", "Expired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="admin_invitations")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tenant_admin_invitations")
+    email = models.EmailField()
+    first_name = models.CharField(max_length=120, blank=True)
+    last_name = models.CharField(max_length=120, blank=True)
+    token_hash = models.CharField(max_length=128, unique=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.PENDING)
+
+    class Meta:
+        indexes = [models.Index(fields=["tenant", "email", "status"])]
+
+    @classmethod
+    def issue_token(cls) -> str:
+        return secrets.token_urlsafe(32)
+
+    @classmethod
+    def hash_token(cls, token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class Plan(TimeStampedModel):
@@ -127,6 +188,8 @@ class Plan(TimeStampedModel):
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     billing_interval = models.CharField(max_length=24, choices=BillingInterval.choices, default=BillingInterval.MONTHLY)
+    price_metadata = models.JSONField(default=dict, blank=True)
+    currency = models.CharField(max_length=3, blank=True)
     user_limit = models.PositiveIntegerField(null=True, blank=True)
     warehouse_limit = models.PositiveIntegerField(null=True, blank=True)
     storage_limit_gb = models.PositiveIntegerField(null=True, blank=True)
@@ -196,19 +259,34 @@ class TenantModule(TimeStampedModel):
         PLAN = "PLAN", "Plan"
         OVERRIDE = "OVERRIDE", "Override"
 
+    class OverrideState(models.TextChoices):
+        INHERIT = "INHERIT", "Inherit"
+        ENABLED = "ENABLED", "Enabled"
+        DISABLED = "DISABLED", "Disabled"
+
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="modules")
     module_code = models.SlugField(max_length=80)
     enabled = models.BooleanField(default=True)
     source = models.CharField(max_length=24, choices=Source.choices, default=Source.OVERRIDE)
+    override_state = models.CharField(max_length=24, choices=OverrideState.choices, default=OverrideState.ENABLED)
 
     class Meta:
         unique_together = [("tenant", "module_code")]
+
+
+class TenantModuleHistory(TimeStampedModel):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="module_history")
+    module_code = models.SlugField(max_length=80)
+    previous_state = models.CharField(max_length=24, blank=True)
+    new_state = models.CharField(max_length=24)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
 
 
 class FeatureFlag(TimeStampedModel):
     code = models.SlugField(max_length=120, unique=True)
     name = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
+    active = models.BooleanField(default=True)
     enabled_by_default = models.BooleanField(default=False)
     environment_metadata = models.JSONField(default=dict, blank=True)
 

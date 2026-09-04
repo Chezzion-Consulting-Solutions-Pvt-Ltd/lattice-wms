@@ -13,10 +13,13 @@ class OwnerReportsView(APIView):
     throttle_scope = "admin_api"
     permission_classes = [IsOwnerConsoleUser]
 
+    def get_required_permission(self, request):
+        return "platform.reports.export" if request.GET.get("export") == "csv" or request.GET.get("format") == "csv" else "platform.reports.view"
+
     def get(self, request):
         report_type = request.GET.get("type", "tenant-status")
         rows = build_report(report_type)
-        if request.GET.get("format") == "csv":
+        if request.GET.get("export") == "csv" or request.GET.get("format") == "csv":
             record_owner_audit(request, "EXPORT_CREATED", resource_type="OwnerReport", resource_id=report_type, after={"rows": len(rows)})
             headers = list(rows[0].keys()) if rows else ["status"]
             return csv_response(f"{report_type}.csv", headers, rows)
