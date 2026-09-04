@@ -8,7 +8,7 @@ Status values: `NOT STARTED`, `IN PROGRESS`, `BLOCKED`, `COMPLETE`.
 | Phase 1 | SaaS control plane: tenants, domains, DB metadata, plans, modules, features, identity membership, control audit | IN PROGRESS | Migrations and model tests pass |
 | Phase 2 | Tenant DB infrastructure: provisioning, secrets abstraction, resolver, context, router, migrations, health | COMPLETE | Docker-backed Alpha/Beta tenant isolation suite passes |
 | Phase 3 | Owner Console + Platform IAM: dashboard, tenant management, platform users, MFA, RBAC, permissions, warehouse scope, audit, security events | IN PROGRESS | Owner dashboard and IAM security tests pass |
-| Phase 4 | Tenant Administration + Organizational Hierarchy: tenant-domain login, tenant shell, plants/sites, warehouses, zones, storage types, storage sections, bins/locations | IN PROGRESS | Tenant-domain auth, hierarchy CRUD, validation, audit, and isolation tests pass |
+| Phase 4 | Tenant Administration + Warehouse Configuration: tenant-domain login, tenant shell, plants/sites, warehouses, storage types, zones, sections, bays, configuration masters, tenant IAM | COMPLETE | Tenant-domain auth, configuration CRUD, validation, audit, frontend build/lint, and isolation tests pass |
 | Phase 5 | Tenant Master Data Foundation: products, UOM, partners, handling units, reason codes, inventory statuses, import/export | IN PROGRESS | Tenant DB-backed master-data tests pass |
 | Phase 6 | Inbound | NOT STARTED | Master data tests pass |
 | Phase 7 | Inventory | NOT STARTED | Ledger and race tests pass |
@@ -65,13 +65,13 @@ Still in progress for tenant/client authentication:
 
 Completed in the tenant administration and hierarchy milestone:
 
-- Tenant database models and migrations for Plant, Warehouse, Zone, Storage Type, Storage Section, and Bin.
+- Tenant database models and migrations for Plant, Warehouse, Zone, Storage Type, Storage Section, and Bay.
 - Tenant-scoped API routes for list/create/detail/update of hierarchy records.
-- Server-side hierarchy validation for cross-warehouse Zone, Storage Type, Section, and Bin references.
+- Server-side hierarchy validation for cross-warehouse Zone, Storage Type, Section, and Bay references.
 - Active warehouse context selection with active `WarehouseAssignment` enforcement.
 - Tenant hierarchy browser API and frontend page.
-- Real tenant admin frontend create/list pages for Plants, Warehouses, Zones, Storage Types, Sections, and Bins.
-- Docker-backed hierarchy API tests for duplicate codes, optional Plant, invalid references, Bin block/unblock, cross-tenant denial, permission denial, and audit creation.
+- Real tenant admin frontend create/list pages for Plants, Warehouses, Zones, Storage Types, Sections, and Bays.
+- Docker-backed hierarchy API tests for duplicate codes, optional Plant, invalid references, Bay block/unblock, cross-tenant denial, permission denial, and audit creation.
 
 ## Current Milestone: Lattice Tenant Master Data Foundation
 
@@ -91,3 +91,16 @@ Still pending in tenant master data:
 - UOM, Products/SKU, UOM conversions, packaging, barcodes, vendors, customers, carriers, HU types, reason codes, inventory statuses, product storage rules, product warehouse configuration, import, and export.
 
 Inbound, Putaway, Inventory Transactions, Picking, Packing, Outbound, and PGI remain blocked until the Tenant Master Data Foundation is complete.
+
+## Tenant Console + Warehouse Configuration Completion
+
+Completed:
+
+- Tenant shell/navigation and dashboard foundation.
+- Plant, Warehouse, Storage Type, Zone, Section, and Bay CRUD.
+- Supporting warehouse configuration for HU, pallets, machines, resources, SKU groups, inventory categories, operations, missions, mission groups, zone queues, sequences, statuses, transport, and warehouse control.
+- Bay bulk generation, import preview/commit, CSV export, and sequence actions.
+- Tenant users, tenant roles, warehouse assignments, and tenant settings foundation.
+- Tenant audit and `lattice_log` warehouse logging for configuration mutations.
+
+Later by design: KnightVizion, inbound, receiving, putaway, inventory balances, inventory movements, picking, packing, shipping, outbound, PGI, RF, and voice.

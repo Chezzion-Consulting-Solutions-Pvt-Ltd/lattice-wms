@@ -17,8 +17,8 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Authorization | RBAC and granular permissions | VERIFIED | Role/permission models, tenant permission helpers, and explicit owner per-permission API tests pass |
 | Authorization | Owner lifecycle APIs | VERIFIED | Owner APIs require authenticated staff/owner principal plus matching active platform-role permission |
 | Authorization | Owner dashboard access | VERIFIED | Anonymous/non-owner denied; owner request allowed |
-| Authorization | Warehouse scope | PARTIAL | Assignment model and allow/deny tests |
-| Tenant Administration | Hierarchy CRUD | VERIFIED | Tenant DB-backed plant, warehouse, zone, storage type, section, bin API tests pass |
+| Authorization | Warehouse scope | VERIFIED | Assignment model plus tenant configuration allow/deny tests pass |
+| Tenant Administration | Warehouse configuration CRUD | VERIFIED | Tenant DB-backed plant, warehouse, storage type, zone, section, bay, supporting configuration, sequence, import/export, tenant IAM, and audit tests pass |
 | Tenant Master Data | Product Category CRUD | VERIFIED | Tenant DB-backed Product Category API tests pass; table exists in tenant DBs and not in control DB |
 | Tenant Administration | Active warehouse context | VERIFIED | Backend verifies active membership, active warehouse, and active assignment before session context change |
 | Session Management | Secure cookie/JWT strategy | VERIFIED | HttpOnly JWT cookies, tracked security-session model, Bearer auth, refresh, revoked/expired enforcement tests |
@@ -31,7 +31,7 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Encryption | TLS in production | PARTIAL | Settings and docs |
 | Secrets | Secret references, no plaintext tenant DB password columns | VERIFIED | `TenantDatabase.secret_reference`; owner provisioning tests assert tenant DB passwords and admin invitation token hashes are not returned |
 | File Security | Upload controls | NOT IMPLEMENTED | Future phase |
-| Audit | Structured append-only audit | PARTIAL | Control audit model, owner mutation audits, identity security events, and owner audit browsing API |
+| Audit | Structured append-only audit | VERIFIED | Control audit model, owner mutation audits, identity security events, tenant warehouse configuration audit, and `lattice_log` tests pass |
 | Logging | Request IDs | PARTIAL | Middleware |
 | Monitoring | Health checks | VERIFIED | Compose healthchecks for backend, frontend, Celery, PostgreSQL, and Redis |
 | Backups | Tenant backup metadata | VERIFIED | `BackupPolicy` and `BackupRecord` control-plane metadata, fail-closed `NOT_CONFIGURED`, and `LOCAL_METADATA` drill execution tests pass |
@@ -41,6 +41,6 @@ Status values: `NOT IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`.
 | Cloud/Network Security | Private DB/Redis design | VERIFIED | Compose publishes only backend/frontend ports; Postgres/Redis remain internal |
 | Data Residency | Region metadata | PARTIAL | Tenant model region |
 | Incident Response | Runbook | PARTIAL | Initial document |
-| Penetration Testing | Security test suite | VERIFIED | Docker-backed mandatory security suite with DB isolation enabled: 103 passed, 0 failed, 0 skipped |
+| Penetration Testing | Security test suite | VERIFIED | Docker-backed mandatory security suite with DB isolation enabled: 106 passed, 0 failed |
 | Vendor Risk | Vendor security evidence request | IMPLEMENTED | `docs/VENDOR_SECURITY_EVIDENCE_REQUEST.md` covers checklist, SOC 2 Type II, privacy, ISO, VA/PT, LLM security, mobile PT, DR drill, and backup restore evidence |
 | Security Assessment | Current security measures assessment | IMPLEMENTED | `docs/SECURITY_MEASURES_ASSESSMENT.md` separates verified app controls from external evidence gaps |

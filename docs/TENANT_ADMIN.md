@@ -10,7 +10,7 @@ Implemented tenant admin pages:
 - `/tenant/zones`
 - `/tenant/storage-types`
 - `/tenant/storage-sections`
-- `/tenant/bins`
+- `/tenant/bays`
 - `/tenant/hierarchy`
 - `/tenant/users-access`
 - `/tenant/settings`

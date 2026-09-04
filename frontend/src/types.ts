@@ -28,6 +28,8 @@ export type TenantContext = {
     display_name: string;
     status: string;
     license_number: string;
+    timezone?: string;
+    default_language?: string;
   };
   session: {
     mfa_enabled: boolean;
@@ -37,14 +39,22 @@ export type TenantContext = {
     membership_id: string;
     roles: string[];
     permissions: string[];
-    warehouses: { warehouse_code: string }[];
+    warehouses: Array<{ warehouse_code: string } | string>;
   };
   modules: string[];
   counts: {
     plants: number;
     warehouses: number;
+    storage_types: number;
     zones: number;
+    sections: number;
     bins: number;
+    bays: number;
+    active_bays: number;
+    blocked_bays: number;
+    machines: number;
+    people_resources: number;
+    configuration_alerts: number;
     active_users: number;
     enabled_modules: number;
   };

@@ -4,6 +4,14 @@
 
 ### Implemented
 
+- Added Tenant Console Phase 1 + warehouse configuration completion: tenant dashboard, dedicated TenantShell wrapper, reusable tenant resource pages, full tenant configuration route set, and Bays naming on the tenant UI.
+- Added tenant database models and safe migration for `Bay` on `lattice_bay`, preserving the previous location data via `RenameModel`/`RenameField` rather than delete/recreate.
+- Added tenant database configuration models for holding units, pallets, machines, people/resources, SKU groups, inventory categories, operations, missions, mission groups, zone queues, sequences, statuses, transport configuration, warehouse control, and warehouse logs.
+- Added bay bulk generation preview/commit, bay import preview/commit, CSV export, and concurrency-safe sequence preview/reserve/reset services.
+- Added tenant users, roles, permissions, warehouse assignments, and settings APIs scoped to the server-resolved tenant.
+- Expanded tenant context/dashboard counts for storage types, sections, bays, active/blocked bays, machines, resources, and configuration alerts.
+- Added server-side warehouse assignment checks for warehouse-scoped tenant configuration APIs and tests for cross-warehouse denial.
+- Added requested docs for Tenant Console, Tenant API, Warehouse Configuration, Warehouse Hierarchy, Lattice Nomenclature, Bay Configuration, Tenant IAM, and Warehouse Control.
 - Kept the Owner Console continuation inside the existing repository and reduced page bloat by extracting reusable owner route metadata, `OwnerResourceTable`, `OwnerCrudCard`, filter controls, pagination, detail table, and JSON/CSV helpers.
 - Added durable provisioning state to tenant database metadata: explicit provisioning steps and safe failure summaries.
 - Added control-plane `TenantConfiguration`, `TenantAdminInvitation`, and `TenantModuleHistory` models, plus tenant module override-state tracking.
@@ -32,6 +40,13 @@
 
 ### Validation Executed
 
+- Tenant Console + warehouse configuration: `docker compose exec backend python manage.py migrate_tenant_databases`: applied `warehouse.0006` to Alpha and Beta.
+- Tenant Console + warehouse configuration: `docker compose exec backend python manage.py makemigrations --check --dry-run`: passed with no changes detected.
+- Tenant Console + warehouse configuration: `docker compose exec backend python manage.py check`: passed.
+- Tenant Console + warehouse configuration: `docker compose exec -e LATTICE_RUN_DB_ISOLATION=1 backend pytest warehouse/tests/test_hierarchy_api.py -q`: 11 passed.
+- Tenant Console + warehouse configuration: `docker compose exec -e LATTICE_RUN_DB_ISOLATION=1 backend pytest -q`: 106 passed.
+- Tenant Console + warehouse configuration: `frontend npm.cmd run build`: passed.
+- Tenant Console + warehouse configuration: `frontend npm.cmd run lint`: passed.
 - `docker compose exec backend python manage.py makemigrations control`: created `control.0006` and `control.0007`.
 - `docker compose exec backend python manage.py migrate`: applied `control.0006` and `control.0007`.
 - `docker compose exec backend python manage.py makemigrations --check`: passed with no changes detected.
@@ -57,6 +72,8 @@
 
 ### Known Limitations
 
+- KnightVizion, inbound, receiving, ASN, GR, putaway, inventory execution, outbound, shipping, PGI, RF, and voice remain later by design.
+- Tenant bay import currently supports JSON row preview/commit plus CSV export; CSV upload parsing can be added when file upload controls are introduced.
 - Owner Console now has explicit per-permission Owner API enforcement, tenant-detail related-resource APIs, migration orchestration, and local backup/restore execution hooks. Production-grade DNS/HTTP domain verification, production backup provider adapters, and PITR-grade restore execution remain provider-specific follow-up work.
 - Production DNS/HTTP domain verification remains pending; local-development verification is implemented.
 - Backup/restore currently supports truthful `NOT_CONFIGURED` failure and `LOCAL_METADATA` drill execution; real object-store/PITR providers must be integrated before production restore claims.
@@ -148,7 +165,7 @@
 - Added tenant hierarchy APIs for plants, warehouses, zones, storage types, storage sections, bins, active warehouse context selection, and hierarchy browsing under `/api/v1/tenant/`.
 - Added tenant hierarchy audit events for create/update/status/block/unblock and active warehouse selection.
 - Added tenant database actor UUID references for hierarchy records without cross-database foreign keys.
-- Added real tenant admin frontend routes for Plants, Warehouses, Zones, Storage Types, Sections, Bins, and Hierarchy with API-backed create/list flows.
+- Added real tenant admin frontend routes for Plants, Warehouses, Zones, Storage Types, Sections, Bays, and Hierarchy with API-backed create/list flows.
 - Hardened the owner dashboard API with owner/staff authorization, real control-plane tenant counts, database-health summaries, migration-warning counts, active support grant counts, recent audit/security activity, and safe serialization that excludes tenant DB secret references.
 - Updated tenant database runtime registration to use the trusted control-plane `database_host_reference` instead of browser-provided selectors.
 - Promoted `control.GlobalUser` to the custom Django authentication user model.

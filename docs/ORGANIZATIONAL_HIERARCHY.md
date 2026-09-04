@@ -10,8 +10,8 @@ Supported hierarchy:
 - Zone
 - optional Storage Type
 - optional Storage Section
-- Bin / Location
+- Bay / Location
 
 Plant is optional. A small tenant can operate directly from Tenant to Warehouse, while larger tenants can use Plant to group warehouses.
 
-Server-side validation enforces parent-child consistency. A Section or Bin cannot combine a Warehouse with a Zone, Storage Type, or Section from another Warehouse.
+Server-side validation enforces parent-child consistency. A Section or Bay cannot combine a Warehouse with a Zone, Storage Type, or Section from another Warehouse.

@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from control.models import Tenant, TenantMembership, TenantModule
-from identity.models import MembershipRole, Permission, PlatformUserRole, Role, RolePermission
+from identity.models import MembershipRole, Permission, PlatformUserRole, Role, RolePermission, WarehouseAssignment
 
 
 OWNER_EMAIL = "owner@lattice.local"
@@ -13,6 +13,32 @@ OWNER_PASSWORD = "LocalOwnerPass123!"
 TENANT_PASSWORD = "LocalTenantPass123!"
 
 TENANT_PERMISSION_CODES = (
+    ("tenant.dashboard.view", "View tenant dashboard."),
+    ("tenant.plants.view", "View tenant plants."),
+    ("tenant.plants.manage", "Manage tenant plants."),
+    ("tenant.warehouses.view", "View tenant warehouses."),
+    ("tenant.warehouses.manage", "Manage tenant warehouses."),
+    ("tenant.storage_types.view", "View tenant storage types."),
+    ("tenant.storage_types.manage", "Manage tenant storage types."),
+    ("tenant.zones.view", "View tenant zones."),
+    ("tenant.zones.manage", "Manage tenant zones."),
+    ("tenant.sections.view", "View tenant sections."),
+    ("tenant.sections.manage", "Manage tenant sections."),
+    ("tenant.bays.view", "View inventory bays."),
+    ("tenant.bays.manage", "Manage inventory bays."),
+    ("tenant.bays.bulk_create", "Bulk create inventory bays."),
+    ("tenant.bays.import", "Import inventory bays."),
+    ("tenant.bays.export", "Export inventory bays."),
+    ("tenant.configuration.view", "View warehouse configuration."),
+    ("tenant.configuration.manage", "Manage warehouse configuration."),
+    ("tenant.users.view", "View tenant users."),
+    ("tenant.users.manage", "Manage tenant users."),
+    ("tenant.roles.view", "View tenant roles."),
+    ("tenant.roles.manage", "Manage tenant roles."),
+    ("tenant.settings.view", "View tenant settings."),
+    ("tenant.settings.manage", "Manage tenant settings."),
+    ("tenant.warehouse_assignments.view", "View tenant warehouse assignments."),
+    ("tenant.warehouse_assignments.manage", "Manage tenant warehouse assignments."),
     ("masters.categories.view", "View product categories."),
     ("masters.categories.manage", "Manage product categories."),
     ("organization.hierarchy.view", "View tenant organization hierarchy."),
@@ -70,6 +96,11 @@ class Command(BaseCommand):
                 defaults={"status": TenantMembership.Status.ACTIVE, "is_primary": True},
             )
             MembershipRole.objects.get_or_create(membership=membership, role=tenant_role)
+            WarehouseAssignment.objects.update_or_create(
+                membership=membership,
+                warehouse_code="*",
+                defaults={"is_active": True},
+            )
             tenant_accounts.append((tenant.display_name, email, TENANT_PASSWORD))
 
         self.stdout.write(self.style.SUCCESS("Local test users are ready."))

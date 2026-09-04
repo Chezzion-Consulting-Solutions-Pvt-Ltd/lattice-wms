@@ -4,6 +4,7 @@ import os
 from uuid import uuid4
 
 import pytest
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.test import Client, override_settings
 from django.utils import timezone
@@ -11,6 +12,7 @@ from django.utils import timezone
 from audit.models import AuditEvent
 from control.models import Tenant, TenantDatabase, TenantDomain, TenantMembership
 from identity.models import MembershipRole, Permission, Role, RolePermission, WarehouseAssignment
+from warehouse.models import Bay, WarehouseLog
 
 
 pytestmark = [
@@ -23,6 +25,32 @@ pytestmark = [
 
 
 ALL_HIERARCHY_PERMISSIONS = [
+    "tenant.dashboard.view",
+    "tenant.plants.view",
+    "tenant.plants.manage",
+    "tenant.warehouses.view",
+    "tenant.warehouses.manage",
+    "tenant.storage_types.view",
+    "tenant.storage_types.manage",
+    "tenant.zones.view",
+    "tenant.zones.manage",
+    "tenant.sections.view",
+    "tenant.sections.manage",
+    "tenant.bays.view",
+    "tenant.bays.manage",
+    "tenant.bays.bulk_create",
+    "tenant.bays.import",
+    "tenant.bays.export",
+    "tenant.configuration.view",
+    "tenant.configuration.manage",
+    "tenant.users.view",
+    "tenant.users.manage",
+    "tenant.roles.view",
+    "tenant.roles.manage",
+    "tenant.settings.view",
+    "tenant.settings.manage",
+    "tenant.warehouse_assignments.view",
+    "tenant.warehouse_assignments.manage",
     "masters.categories.view",
     "masters.categories.manage",
     "organization.hierarchy.view",
@@ -52,7 +80,7 @@ def tenant_admin_client(db):
     return _tenant_client("alpha", ALL_HIERARCHY_PERMISSIONS)
 
 
-def _tenant_client(code: str, permissions: list[str]):
+def _tenant_client(code: str, permissions: list[str], *, assign_all_warehouses: bool = True):
     tenant = Tenant.objects.create(tenant_code=f"{code}-{uuid4().hex[:8]}", display_name=f"Tenant {code.title()}", status=Tenant.Status.ACTIVE)
     TenantDomain.objects.create(
         tenant=tenant,
@@ -80,7 +108,10 @@ def _tenant_client(code: str, permissions: list[str]):
         permission, _ = Permission.objects.get_or_create(code=code_name, defaults={"description": code_name})
         RolePermission.objects.get_or_create(role=role, permission=permission)
     MembershipRole.objects.create(membership=membership, role=role)
+    if assign_all_warehouses:
+        WarehouseAssignment.objects.create(membership=membership, warehouse_code="*", is_active=True)
     client = Client(HTTP_HOST=f"{code}.localhost")
+    cache.clear()
     login = client.post(
         "/api/v1/auth/login/",
         {"email": user.email, "password": "StrongerPass123!"},
@@ -202,7 +233,7 @@ def test_product_category_crud_hierarchy_duplicate_and_audit(tenant_admin_client
 
 
 @override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "testserver"])
-def test_zone_storage_type_section_bin_crud_and_hierarchy_validation(tenant_admin_client):
+def test_zone_storage_type_section_bay_crud_and_hierarchy_validation(tenant_admin_client):
     client, _tenant, _membership = tenant_admin_client
     suffix = uuid4().hex[:10]
     warehouse = client.post(
@@ -247,20 +278,20 @@ def test_zone_storage_type_section_bin_crud_and_hierarchy_validation(tenant_admi
         content_type="application/json",
         HTTP_HOST="alpha.localhost",
     )
-    bin_created = client.post(
-        "/api/v1/tenant/bins/",
-        {"warehouse_id": warehouse["id"], "zone_id": zone["id"], "storage_type_id": storage_type["id"], "section_id": section.json()["id"], "bin_code": f"BIN-{suffix}", "barcode": f"BC-{suffix}"},
+    bay_created = client.post(
+        "/api/v1/tenant/bays/",
+        {"warehouse_id": warehouse["id"], "zone_id": zone["id"], "storage_type_id": storage_type["id"], "section_id": section.json()["id"], "bay_code": f"BAY-{suffix}", "barcode": f"BC-{suffix}"},
         content_type="application/json",
         HTTP_HOST="alpha.localhost",
     )
-    duplicate_bin = client.post(
-        "/api/v1/tenant/bins/",
-        {"warehouse_id": warehouse["id"], "zone_id": zone["id"], "bin_code": f"BIN-{suffix}"},
+    duplicate_bay = client.post(
+        "/api/v1/tenant/bays/",
+        {"warehouse_id": warehouse["id"], "zone_id": zone["id"], "bay_code": f"BAY-{suffix}"},
         content_type="application/json",
         HTTP_HOST="alpha.localhost",
     )
     blocked = client.patch(
-        f"/api/v1/tenant/bins/{bin_created.json()['id']}/",
+        f"/api/v1/tenant/bays/{bay_created.json()['id']}/",
         {"is_blocked": True},
         content_type="application/json",
         HTTP_HOST="alpha.localhost",
@@ -268,18 +299,145 @@ def test_zone_storage_type_section_bin_crud_and_hierarchy_validation(tenant_admi
 
     assert section.status_code == 201
     assert invalid_section.status_code == 400
-    assert bin_created.status_code == 201
-    assert duplicate_bin.status_code == 400
+    assert bay_created.status_code == 201
+    assert duplicate_bay.status_code == 400
     assert blocked.status_code == 200
     assert blocked.json()["is_blocked"] is True
     assert blocked.json()["status"] == "BLOCKED"
-    for action in ("ZONE_CREATED", "STORAGE_TYPE_CREATED", "SECTION_CREATED", "BIN_CREATED", "BIN_BLOCKED"):
+    for action in ("ZONE_CREATED", "STORAGE_TYPE_CREATED", "SECTION_CREATED", "BAY_CREATED", "BAY_BLOCKED"):
         assert AuditEvent.objects.filter(action=action).exists()
+    assert WarehouseLog.objects.using("tenant_alpha").filter(action="BAY_CREATED").exists()
 
 
 @override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "testserver"])
-def test_active_warehouse_context_allowed_and_denied_by_assignment(tenant_admin_client):
-    client, _tenant, membership = tenant_admin_client
+def test_bay_bulk_import_export_and_table_name(tenant_admin_client):
+    client, _tenant, _membership = tenant_admin_client
+    suffix = uuid4().hex[:10]
+    warehouse = client.post(
+        "/api/v1/tenant/warehouses/",
+        {"code": f"WH-{suffix}", "name": "Bulk Warehouse", "status": "ACTIVE"},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    ).json()
+    zone = client.post(
+        "/api/v1/tenant/zones/",
+        {"warehouse_id": warehouse["id"], "zone_code": f"ZN-{suffix}", "name": "Storage", "zone_type": "STORAGE"},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    ).json()
+
+    preview = client.post(
+        "/api/v1/tenant/bays/bulk/",
+        {"warehouse_id": warehouse["id"], "zone_id": zone["id"], "pattern": "A-{rack}-{level}", "racks": "01..02", "levels": "01..02"},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    commit = client.post(
+        "/api/v1/tenant/bays/bulk/",
+        {"warehouse_id": warehouse["id"], "zone_id": zone["id"], "pattern": "A-{rack}-{level}", "racks": "01..02", "levels": "01..02", "commit": True},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    import_preview = client.post(
+        "/api/v1/tenant/bays/import/",
+        {"rows": [{"warehouse_id": warehouse["id"], "zone_id": zone["id"], "bay_code": f"IMP-{suffix}"}]},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    imported = client.post(
+        "/api/v1/tenant/bays/import/",
+        {"commit": True, "rows": [{"warehouse_id": warehouse["id"], "zone_id": zone["id"], "bay_code": f"IMP-{suffix}"}]},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    exported = client.get("/api/v1/tenant/bays/export/", HTTP_HOST="alpha.localhost")
+
+    assert preview.status_code == 200
+    assert preview.json()["count"] == 4
+    assert commit.status_code == 201
+    assert commit.json()["created"] == 4
+    assert import_preview.status_code == 200
+    assert imported.status_code == 201
+    assert exported.status_code == 200
+    assert b"bay_code" in exported.content
+    assert Bay._meta.db_table == "lattice_bay"
+    assert Bay.objects.using("tenant_alpha").filter(bin_code=f"IMP-{suffix}").exists()
+    assert AuditEvent.objects.filter(action="BAY_BULK_CREATED").exists()
+    assert AuditEvent.objects.filter(action="BAY_IMPORT_COMPLETED").exists()
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "testserver"])
+def test_configuration_crud_and_sequence_actions(tenant_admin_client):
+    client, _tenant, _membership = tenant_admin_client
+    suffix = uuid4().hex[:10]
+    hu = client.post(
+        "/api/v1/tenant/configuration/holding-units/",
+        {"hu_code": f"HU-{suffix}", "name": "Carton", "hu_type": "CARTON"},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    sequence = client.post(
+        "/api/v1/tenant/configuration/sequences/",
+        {"sequence_code": f"SEQ-{suffix}", "name": "Bay Sequence", "entity_type": "BAY", "prefix": "B-", "padding": 4, "current_value": 7},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    preview = client.post(f"/api/v1/tenant/configuration/sequences/{sequence.json()['id']}/preview/", {}, content_type="application/json", HTTP_HOST="alpha.localhost")
+    reserve = client.post(f"/api/v1/tenant/configuration/sequences/{sequence.json()['id']}/reserve/", {}, content_type="application/json", HTTP_HOST="alpha.localhost")
+    reset = client.post(f"/api/v1/tenant/configuration/sequences/{sequence.json()['id']}/reset/", {}, content_type="application/json", HTTP_HOST="alpha.localhost")
+
+    assert hu.status_code == 201
+    assert hu.json()["hu_code"] == f"HU-{suffix}"
+    assert sequence.status_code == 201
+    assert preview.status_code == 200
+    assert preview.json()["value"] == "B-0008"
+    assert reserve.status_code == 200
+    assert reserve.json()["value"] == "B-0008"
+    assert reset.status_code == 200
+    assert reset.json()["value"] == "B-0001"
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "testserver"])
+def test_tenant_users_roles_assignments_and_settings(tenant_admin_client):
+    client, _tenant, _membership = tenant_admin_client
+    suffix = uuid4().hex[:10]
+    role = client.post(
+        "/api/v1/tenant/roles/",
+        {"code": f"TENANT_OPERATOR_{suffix}".upper(), "name": "Tenant Operator", "permissions": ["tenant.dashboard.view"]},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    user = client.post(
+        "/api/v1/tenant/users/",
+        {"email": f"operator-{suffix}@example.test", "roles": [role.json()["code"]], "warehouses": ["*"]},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    assignments = client.post(
+        "/api/v1/tenant/warehouse-assignments/",
+        {"membership_id": user.json()["id"], "warehouses": ["WH-A"]},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+    settings = client.patch(
+        "/api/v1/tenant/settings/",
+        {"display_name": "Tenant Alpha Updated", "timezone": "UTC", "default_language": "en", "warehouse_control": {"uom": "EA"}},
+        content_type="application/json",
+        HTTP_HOST="alpha.localhost",
+    )
+
+    assert role.status_code == 201
+    assert user.status_code == 201
+    assert user.json()["roles"] == [role.json()["code"]]
+    assert assignments.status_code == 200
+    assert assignments.json()["warehouses"] == ["WH-A"]
+    assert settings.status_code == 200
+    assert settings.json()["tenant"]["display_name"] == "Tenant Alpha Updated"
+
+
+@override_settings(ALLOWED_HOSTS=["alpha.localhost", "beta.localhost", "testserver"])
+def test_active_warehouse_context_allowed_and_denied_by_assignment(db):
+    client, _tenant, membership = _tenant_client("alpha", ALL_HIERARCHY_PERMISSIONS, assign_all_warehouses=False)
     suffix = uuid4().hex[:10]
     warehouse = client.post(
         "/api/v1/tenant/warehouses/",

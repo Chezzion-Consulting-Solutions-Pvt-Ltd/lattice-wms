@@ -93,7 +93,7 @@ def test_alpha_user_routes_to_alpha_database_and_cannot_read_beta_context_object
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                insert into warehouse_warehouse (
+                insert into lattice_whs (
                     id, code, name, is_active, address_line_1, address_line_2,
                     capacity_metadata, city, country, created_at, description,
                     postal_code, state, status, timezone, updated_at, warehouse_type
@@ -103,15 +103,15 @@ def test_alpha_user_routes_to_alpha_database_and_cannot_read_beta_context_object
                 (warehouse_id, f"A-{uuid4().hex[:12]}", "Alpha Warehouse", True),
             )
             cursor.execute(
-                "insert into warehouse_warehouseprobeobject (id, external_reference, warehouse_id) values (%s, %s, %s)",
+                "insert into lattice_probe (id, external_reference, warehouse_id) values (%s, %s, %s)",
                 (object_id, "alpha-only", warehouse_id),
             )
-            cursor.execute("select external_reference from warehouse_warehouseprobeobject where id = %s", (object_id,))
+            cursor.execute("select external_reference from lattice_probe where id = %s", (object_id,))
             assert cursor.fetchone() == ("alpha-only",)
 
     with psycopg.connect(_dsn("lattice_beta_app", beta_password, "lattice_beta"), connect_timeout=2) as connection:
         with connection.cursor() as cursor:
-            cursor.execute("select external_reference from warehouse_warehouseprobeobject where id = %s", (object_id,))
+            cursor.execute("select external_reference from lattice_probe where id = %s", (object_id,))
             assert cursor.fetchone() is None
 
 
